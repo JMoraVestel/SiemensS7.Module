@@ -1,9 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
+using SiemensModule.TagConfig;
+using vNode.Sdk.Data;
 
 namespace vNode.SiemensS7.Helper
 {
@@ -25,7 +23,12 @@ namespace vNode.SiemensS7.Helper
 
             try
             {
-                ModbusTagConfig? cfg = JsonSerializer.Deserialize<ModbusTagConfig>(tag.Config);
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                };
+
+                SiemensTagConfig? cfg = JsonSerializer.Deserialize<SiemensTagConfig>(tag.Config, options);
                 if (cfg == null || cfg.PollRate < 0)
                 {
                     return false;
