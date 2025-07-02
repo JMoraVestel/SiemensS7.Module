@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AssemblyVersion>1.0.0.26</AssemblyVersion>
+        <FileVersion>1.0.0.26</FileVersion>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <Compile Remove="TagConfig\ModbusAddressConverter.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Reference Include="vNode.Sdk">
+        <HintPath>..\Sdk\vNode.Sdk.dll</HintPath>
+      </Reference>
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="NModbus" Version="3.0.81" />
+      <PackageReference Include="NModbus.Serial" Version="3.0.81" />
+    </ItemGroup>
+
+</Project>
