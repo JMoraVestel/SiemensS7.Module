@@ -1,0 +1,152 @@
+[
+  {
+    "Name": "BOOL",
+    "Address": "I0.0",
+    "DataType": "BOOL"
+  },
+  {
+    "Name": "BYTE",
+    "Address": "IB0",
+    "DataType": "BYTE"
+  },
+  {
+    "Name": "WORD",
+    "Address": "IW2",
+    "DataType": "WORD"
+  },
+  {
+    "Name": "DWORD",
+    "Address": "ID4",
+    "DataType": "DWORD"
+  },
+
+  {
+    "Name": "BOOL",
+    "Address": "Q0.1",
+    "DataType": "BOOL"
+  },
+  {
+    "Name": "BYTE",
+    "Address": "QB2",
+    "DataType": "BYTE"
+  },
+  {
+    "Name": "WORD",
+    "Address": "QW4",
+    "DataType": "WORD"
+  },
+  {
+    "Name": "DWORD",
+    "Address": "QD8",
+    "DataType": "DWORD"
+  },
+
+  {
+    "Name": "BOOL",
+    "Address": "M0.0",
+    "DataType": "BOOL"
+  },
+  {
+    "Name": "BYTE",
+    "Address": "MB0",
+    "DataType": "BYTE"
+  },
+  {
+    "Name": "WORD",
+    "Address": "MW2",
+    "DataType": "WORD"
+  },
+  {
+    "Name": "DWORD",
+    "Address": "MD4",
+    "DataType": "DWORD"
+  },
+  {
+    "Name": "REAL",
+    "Address": "MR6",
+    "DataType": "REAL"
+  },
+
+  {
+    "Name": "BOOL",
+    "Address": "DB1.DBX10.2",
+    "DataType": "BOOL"
+  },
+  {
+    "Name": "BYTE",
+    "Address": "DB1.DBB10",
+    "DataType": "BYTE"
+  },
+  {
+    "Name": "WORD",
+    "Address": "DB1.DBW10",
+    "DataType": "WORD"
+  },
+  {
+    "Name": "DWORD",
+    "Address": "DB1.DBD10",
+    "DataType": "DWORD"
+  },
+  {
+    "Name": "REAL",
+    "Address": "DB1.DBD12",
+    "DataType": "REAL"
+  },
+  {
+    "Name": "STRING",
+    "Address": "DB1.DBB20",
+    "DataType": "STRING"
+  },
+  {
+    "Name": "DATE",
+    "Address": "DB1.DBW30",
+    "DataType": "DATE"
+  },
+  {
+    "Name": "TIME",
+    "Address": "DB1.DBD32",
+    "DataType": "TIME"
+  },
+  {
+    "Name": "DATE_AND_TIME",
+    "Address": "DB1.DBD40",
+    "DataType": "DATE_AND_TIME"
+  },
+  {
+    "Name": "S5TIME",
+    "Address": "DB1.DBW50",
+    "DataType": "S5TIME"
+  },
+
+  {
+    "Name": "BOOL",
+    "Address": "PE0.1",
+    "DataType": "BOOL"
+  },
+  {
+    "Name": "BYTE",
+    "Address": "PEB2",
+    "DataType": "BYTE"
+  },
+  {
+    "Name": "WORD",
+    "Address": "PEW4",
+    "DataType": "WORD"
+  },
+  {
+    "Name": "DWORD",
+    "Address": "PED6",
+    "DataType": "DWORD"
+  },
+
+  {
+    "Name": "WORD",
+    "Address": "C0",
+    "DataType": "WORD"
+  },
+  {
+    "Name": "WORD",
+    "Address": "T0",
+    "DataType": "WORD"
+  }
+]

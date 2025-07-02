@@ -1,0 +1,78 @@
+## .NET Core / .NET 5+ standard .gitignore
+
+# Build results
+bin/
+obj/
+out/
+[Ll]og/
+*.log
+
+# User-specific files
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+*.userprefs
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Rider / VSCode
+.idea/
+.vscode/
+*.code-workspace
+
+# Visual Studio
+.vs/
+*.ncb
+*.cache
+*.dbmdl
+*.dbproj.schemaview
+*.pdb
+*.opendb
+
+# dotnet tool restore files
+*.store/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Auto-generated files
+Generated_*/  
+*.g.cs
+*.g.i.cs
+
+# Paket
+.paket/
+paket-files/
+
+# Azure Pipelines
+*.azure-pipelines.yml
+
+# NuGet packages
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+*.nuspec
+
+# Test results
+TestResults/
+*.coverage
+*.coveragexml
+*.testsettings
+*.trx
+
+# Resharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# Others
+*.vspscc
+*.vssscc
+*.psess
+*.vsp
+*.vspx
+*.scc
