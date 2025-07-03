@@ -1,57 +1,42 @@
-﻿using System.IO;
+﻿using Newtonsoft.Json;
+using System;
 using System.Text.Json.Serialization;
-using S7.Net;
-using S7.Net.Types;
 
-namespace SiemensModule.TagConfig;
-
-public class SiemensTagConfig
+namespace SiemensModule.TagConfig
 {
-    [JsonRequired]
-    public string DeviceId { get; set; }
-
-    [JsonRequired]
-#if PLCADDRESSCONVERTER
-    [JsonConverter(typeof(PLCAddressConverter))]
-#endif
-    public PLCAddress Address { get; set; }
-
-    public byte? BitNumber { get; set; }
-    public byte StringSize { get; set; }
-    public int ArraySize { get; set; } = 0;
-    [JsonRequired]
-    public int PollRate { get; set; } = -1;
-    [JsonRequired]
-    [JsonConverter(typeof(JsonStringEnumConverter))]
-    public VarType DataType { get; set; }
-
-    public int GetSize()
+    public enum S7TagDataTypeType
     {
-        int typeSize = DataType switch
-        {
-            VarType.Bit => 1,
-            VarType.Byte => 1,
-            VarType.Word => 2,
-            VarType.Int => 2,
-            VarType.DWord => 4,
-            VarType.DInt => 4,
-            VarType.Real => 4,
-            VarType.LReal => 8,
-            VarType.Timer => 2,
-            VarType.Counter => 2,
-            VarType.String => StringSize,
-            VarType.S7String => StringSize,
-            VarType.S7WString => StringSize * 2,
-            _ => throw new InvalidDataException($"Don't know the size for DataType {DataType}")
-        };
-
-        if (ArraySize > 0)
-        {
-            return typeSize * ArraySize;
-        }
-
-        return typeSize;
+        Bool,
+        Int16,
+        Int32,
+        DInt,
+        DWord,
+        Real,
+        String
     }
 
-    public bool IsReadOnly => Address.DataType == DataType.Input;
+    public class S7TagConfig
+    {
+        [JsonRequired]
+        public string DeviceId { get; set; }
+
+        [JsonRequired]
+        public int DbNumber { get; set; }
+
+        [JsonRequired]
+        public int StartByte { get; set; }
+
+        public byte? BitNumber { get; set; }
+
+        public byte StringSize { get; set; } = 0;
+
+        public int ArraySize { get; set; } = 0;
+
+        [JsonRequired]
+        public int PollRate { get; set; } = -1;
+
+        [JsonRequired]
+        [Newtonsoft.Json.JsonConverter(typeof(JsonStringEnumConverter))]
+        public S7TagDataTypeType DataType { get; set; }
+    }
 }

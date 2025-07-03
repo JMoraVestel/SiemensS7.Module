@@ -22,7 +22,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="S7netplus" Version="0.20.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="vNode.Sdk">
+      <HintPath>..\..\Common_Dependencies\vNode.Sdk.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
 </Project>
