@@ -1,11 +1,19 @@
 using Newtonsoft.Json;
-using System.Text.Json.Serialization;
 using S7.Net;
+using System.IO;
+using System.Runtime.ConstrainedExecution;
+using System.Text.Json.Serialization;
 
 namespace vNode.SiemensS7.TagConfig
 {
     public class SiemensTagConfig
     {
+        //vNode necesita un identificador único para cada tag, como parte de la lógica de tu aplicación
+        //(por ejemplo, para mapear tags a dispositivos o realizar diagnósticos).
+        //Este identificador no es proporcionado por S7NetPlus, pero puede ser útil para abstraer 
+        //y gestionar los tags en tu sistema.
+        public Guid TagId { get; set; }
+
         [JsonRequired]
         public string Address { get; set; } // Dirección en el PLC
 
@@ -20,7 +28,7 @@ namespace vNode.SiemensS7.TagConfig
 
         [JsonRequired]
         [Newtonsoft.Json.JsonConverter(typeof(JsonStringEnumConverter))]
-        public SiemensTagDataTypeType DataType { get; set; } // Tipo de dato
+        public SiemensTagDataType DataType { get; set; } // Tipo de dato
 
         public ushort GetSize()
         {

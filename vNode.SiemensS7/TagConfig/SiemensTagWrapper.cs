@@ -7,6 +7,7 @@ namespace vNode.SiemensS7.TagConfig
     {
         private readonly SiemensTagConfig _config;
         private readonly TagModelBase _tag;
+        public SiemensTagConfig Config => _config;
         public object? CurrentValue { get; set; }
         public SiemensTagStatusType Status { get; private set; } = SiemensTagStatusType.NotInitialized;
 
