@@ -16,7 +16,7 @@ Para ello se siguen las siguientes condicioes:
 - `ChannelConfig/SiemensChannelConfig.cs` define cómo se conectas al PLC y qué tags vas se van leer.
 - `SiemensCommonLayer/S7TcpStrategy.cs` implementa la conexión TCP con S7NetPlus.
 - `TagReader/S7TagReader.cs` lee los tags y convierte los valores.
-- `TagConfig/` agrupa las clases que describen cada tag (`S7TagConfig`, `S7TagWrapper`, etc.).
+- `TagConfig/` agrupa las clases que describen cada tag (`SiemensTagConfig`, `SiemensTagWrapper`, etc.).
 - `Types/s7_tag_definitions.json` es un ejemplo de tags que para probar. (mock, no se usuará así)
 
 ## Compilación
