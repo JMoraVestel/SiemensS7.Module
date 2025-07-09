@@ -3,7 +3,7 @@ using S7.Net;
 
 namespace vNode.SiemensS7.SiemensCommonLayer
 {
-    public class S7TcpStrategy
+    public class SiemensTcpStrategy
     {
         public Plc Plc { get; private set; }
 
@@ -11,7 +11,7 @@ namespace vNode.SiemensS7.SiemensCommonLayer
         public short Rack { get; }
         public short Slot { get; }
 
-        public S7TcpStrategy(string ip, short rack = 0, short slot = 1)
+        public SiemensTcpStrategy(string ip, short rack = 0, short slot = 1)
         {
             Ip = ip;
             Rack = rack;

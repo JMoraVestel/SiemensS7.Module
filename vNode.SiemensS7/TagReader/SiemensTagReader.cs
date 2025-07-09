@@ -6,11 +6,11 @@ using vNode.SiemensS7.TagConfig;
 
 namespace vNode.SiemensS7.TagReader
 {
-    public class S7TagReader
+    public class SiemensTagReader
     {
-        private readonly S7TcpStrategy _connection;
+        private readonly SiemensTcpStrategy _connection;
 
-        public S7TagReader(S7TcpStrategy connection)
+        public SiemensTagReader(SiemensTcpStrategy connection)
         {
             _connection = connection ?? throw new ArgumentNullException(nameof(connection));
         }

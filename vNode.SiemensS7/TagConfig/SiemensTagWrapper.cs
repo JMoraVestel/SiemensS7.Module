@@ -61,13 +61,13 @@ namespace vNode.SiemensS7.TagConfig
             if (config == null)
             {
                 logger.Error("S7TagWrapper", $"Deserialized config is null for tag ID {tagObject.IdTag}.");
-                return new SiemensTagWrapper(tagObject) { Status = S7TagStatusType.ConfigError };
+                return new SiemensTagWrapper(tagObject) { Status = SiemensTagStatusType.ConfigError };
             }
 
             if (!ValidateTagConfig(tagObject, config, out var error))
             {
                 logger.Error("S7TagWrapper", $"Invalid tag config for tag ID {tagObject.IdTag}: {error}");
-                return new SiemensTagWrapper(tagObject) { Status = S7TagStatusType.ConfigError };
+                return new SiemensTagWrapper(tagObject) { Status = SiemensTagStatusType.ConfigError };
             }
 
             return new SiemensTagWrapper(tagObject, config);
