@@ -7,9 +7,6 @@ namespace vNode.SiemensS7.TagConfig
     public class SiemensTagConfig
     {
         [JsonRequired]
-        public string DeviceId { get; set; }
-
-        [JsonRequired]
         public string Address { get; set; } // Dirección en el PLC
 
         public byte? BitNumber { get; set; } // Para tipos BOOL
@@ -29,14 +26,14 @@ namespace vNode.SiemensS7.TagConfig
         {
             ushort typeSize = DataType switch
             {
-                SiemensTagDataTypeType.Bool => 1,
-                SiemensTagDataTypeType.Byte => 1,
-                SiemensTagDataTypeType.Word => 2,
-                SiemensTagDataTypeType.DWord => 4,
-                SiemensTagDataTypeType.Int => 2,
-                SiemensTagDataTypeType.DInt => 4,
-                SiemensTagDataTypeType.Real => 4,
-                SiemensTagDataTypeType.String => (ushort)Math.Ceiling(StringSize / 2.0),
+                SiemensTagDataType.Bool => 1,
+                SiemensTagDataType.Byte => 1,
+                SiemensTagDataType.Word => 2,
+                SiemensTagDataType.DWord => 4,
+                SiemensTagDataType.Int => 2,
+                SiemensTagDataType.DInt => 4,
+                SiemensTagDataType.Real => 4,
+                SiemensTagDataType.String => (ushort)Math.Ceiling(StringSize / 2.0),
                 _ => throw new System.IO.InvalidDataException($"No se conoce el tamaño para el tipo de dato {DataType}")
             };
 
@@ -50,7 +47,7 @@ namespace vNode.SiemensS7.TagConfig
         public bool IsReadOnly => false; // En Siemens, los tags generalmente no son de solo lectura
     }
 
-    public enum SiemensTagDataTypeType
+    public enum SiemensTagDataType
     {
         Bool,
         Byte,
