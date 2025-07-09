@@ -26,7 +26,7 @@ namespace vNode.SiemensS7.vNode.SiemensS7.TagConfig
         public SiemensTagConfig Config => _config;
         public SiemensTagStatus Status { get; private set; } = SiemensTagStatus.NotInitialized;
 
-        private S7TagWrapper(TagModelBase tagObject, S7TagConfig s7Config)
+        private S7TagWrapper(TagModelBase tagObject, SiemensTagConfig s7Config)
         {
             _tag = tagObject ?? throw new ArgumentNullException(nameof(tagObject), "Tag object cannot be null.");
             _config = s7Config ?? throw new ArgumentNullException(nameof(s7Config), "S7TagConfig cannot be null.");

@@ -29,9 +29,9 @@ namespace SiemensModule
         private readonly ISdkLogger _logger;
         private readonly string _nodeName;
 
-        // Colecciones para gestionar tags de usuario y de control/diagnóstico.
-        private readonly Dictionary<Guid, SiemensTagWrapper> _tags = [];
-        private readonly Dictionary<Guid, SiemensControlTag> _controlTagsDictionary = [];
+        // Reemplazo de las expresiones de colección para inicializar los diccionarios con constructores estándar.  
+        private readonly Dictionary<Guid, SiemensTagWrapper> _tags = new Dictionary<Guid, SiemensTagWrapper>();
+        private readonly Dictionary<Guid, SiemensControlTag> _controlTagsDictionary = new Dictionary<Guid, SiemensControlTag>();
 
         // Componentes principales del canal.
         private SiemensChannelConfig _config;
@@ -113,7 +113,7 @@ namespace SiemensModule
                 if (tag.Status != SiemensTagWrapper.SiemensTagStatusType.ConfigError)
                 {
                     _scheduler.AddTag(tag);
-                    _channelControl.RegisterTag(tag.IdTag, "plc");
+                    _channelControl.RegisterTag(tag.Config.TagId, "plc");
                 }
             }
         }
@@ -222,7 +222,7 @@ namespace SiemensModule
                 }
 
                 _tags[tagObject.IdTag] = wrapper;
-                _channelControl.RegisterTag(wrapper.IdTag, "plc");
+                _channelControl.RegisterTag(wrapper.Config.TagId, "plc");
                 if (wrapper.Config.PollRate > 0)
                 {
                     _scheduler.AddTag(wrapper);
