@@ -126,9 +126,14 @@ namespace vNode.SiemensS7.TagReader
                     var quality = s7Result.IsGood ? QualityCodeOptions.Good_Non_Specific : QualityCodeOptions.Bad_Non_Specific;
 
                     // Use CreateSuccess to create a successful TagReadResult.
+                    var batchItem = new TagReadBatchItem(null!, DateTime.UtcNow)
+                    {
+                        ActualReadTime = DateTime.UtcNow
+                    };
+
                     results[tagId] = TagReadResult.CreateSuccess(new List<TagReadResultItem>
                     {
-                        new TagReadResultItem(s7Result.Value, quality, DateTime.UtcNow)
+                        new TagReadResultItem(batchItem, TagReadResult.TagReadResultType.Success, s7Result.Value)
                     });
                 }
             }
