@@ -29,7 +29,7 @@ class Program
             return;
         }
 
-        var tags = JsonSerializer.Deserialize<List<S7TagConfig>>(json, new JsonSerializerOptions
+        var tags = JsonSerializer.Deserialize<List<SiemensTagConfig>>(json, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
         });

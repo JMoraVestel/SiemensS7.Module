@@ -8,7 +8,7 @@ namespace vNode.SiemensS7.ChannelConfig
         public short Rack { get; set; } = 0;
         public short Slot { get; set; } = 1;
         public int PollingIntervalMs { get; set; } = 1000;
-        public List<TagConfig.S7TagConfig> Tags { get; set; }
+        public List<TagConfig.SiemensTagConfig> Tags { get; set; }
 
         public static SiemensChannelConfig FromJson(JsonObject json)
         {
@@ -20,12 +20,12 @@ namespace vNode.SiemensS7.ChannelConfig
             config.PollingIntervalMs = int.Parse(json["pollingIntervalMs"]?.ToString() ?? "1000");
 
             var tagsJson = json["tags"]?.AsArray() ?? throw new ArgumentException("Falta el array 'tags'");
-            config.Tags = new List<TagConfig.S7TagConfig>();
+            config.Tags = new List<TagConfig.SiemensTagConfig>();
 
             foreach (var tagJson in tagsJson)
             {
                 if (tagJson is JsonObject tagObj)
-                    config.Tags.Add(TagConfig.S7TagConfig.FromJson(tagObj));
+                    config.Tags.Add(TagConfig.SiemensTagConfig.FromJson(tagObj));
             }
 
             return config;

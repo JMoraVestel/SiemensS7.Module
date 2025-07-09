@@ -15,7 +15,7 @@ namespace vNode.SiemensS7.TagReader
             _connection = connection ?? throw new ArgumentNullException(nameof(connection));
         }
 
-        public Dictionary<string, object> ReadTags(IEnumerable<S7TagConfig> tags)
+        public Dictionary<string, object> ReadTags(IEnumerable<SiemensTagConfig> tags)
         {
             var results = new Dictionary<string, object>();
 

@@ -11,7 +11,7 @@ namespace vNode.SiemensS7.TagConfig
 {
     public class S7TagWrapper
     {
-        private readonly S7TagConfig _config;
+        private readonly SiemensTagConfig _config;
         private readonly TagModelBase _tag;
         public object? CurrentValue { get; set; }
         public S7TagStatusType Status { get; private set; } = S7TagStatusType.NotInitialized;
@@ -29,7 +29,7 @@ namespace vNode.SiemensS7.TagConfig
             CurrentValue = tagObject.InitialValue;
         }
 
-        private S7TagWrapper(TagModelBase tagObject, S7TagConfig config)
+        private S7TagWrapper(TagModelBase tagObject, SiemensTagConfig config)
         {
             _tag = tagObject ?? throw new ArgumentNullException(nameof(tagObject));
             _config = config ?? throw new ArgumentNullException(nameof(config));
@@ -44,10 +44,10 @@ namespace vNode.SiemensS7.TagConfig
                 throw new ArgumentException("Tag config cannot be null or empty.", nameof(tagObject.Config));
             }
 
-            S7TagConfig? config;
+            SiemensTagConfig? config;
             try
             {
-                config = Newtonsoft.Json.JsonConvert.DeserializeObject<S7TagConfig>(tagObject.Config);
+                config = Newtonsoft.Json.JsonConvert.DeserializeObject<SiemensTagConfig>(tagObject.Config);
             }
             catch (Exception ex)
             {
@@ -71,7 +71,7 @@ namespace vNode.SiemensS7.TagConfig
             return new S7TagWrapper(tagObject, config);
         }
 
-        private static bool ValidateTagConfig(TagModelBase tag, S7TagConfig config, out string error)
+        private static bool ValidateTagConfig(TagModelBase tag, SiemensTagConfig config, out string error)
         {
             error = string.Empty;
 
