@@ -31,7 +31,7 @@ namespace vNode.SiemensS7
         {
             // Crea una nueva instancia del canal Siemens
             var json = JsonNode.Parse(config) as JsonObject ?? new JsonObject();
-            return new Siemens(nodeName, json, loggerEx, _control ?? new SiemensControl(loggerEx));
+            return new Siemens(Guid.NewGuid(), nodeName, json, loggerEx, _control ?? new SiemensControl(loggerEx));
         }
 
         public override string GetChannelSchema()

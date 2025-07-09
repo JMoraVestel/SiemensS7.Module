@@ -26,12 +26,22 @@ namespace SiemensModule
     /// </summary>
     public class Siemens : BaseChannel
     {
+        /// <summary>
+        /// Obtiene el identificador único del canal.
+        /// </summary>
+        public Guid IdChannel { get; }
+
         private readonly ISdkLogger _logger;
         private readonly string _nodeName;
 
         // Reemplazo de las expresiones de colección para inicializar los diccionarios con constructores estándar.  
         private readonly Dictionary<Guid, SiemensTagWrapper> _tags = new Dictionary<Guid, SiemensTagWrapper>();
         private readonly Dictionary<Guid, SiemensControlTag> _controlTagsDictionary = new Dictionary<Guid, SiemensControlTag>();
+
+        /// <summary>
+        /// Obtiene el número de tags de datos registrados en el canal.
+        /// </summary>
+        public int TagsCount => _tags.Count;
 
         // Componentes principales del canal.
         private SiemensChannelConfig _config;
@@ -52,11 +62,12 @@ namespace SiemensModule
         /// <summary>
         /// Constructor para el canal Siemens.
         /// </summary>
+        /// <param name="idChannel">El identificador único para este canal.</param>
         /// <param name="nodeName">Nombre del nodo vNode.</param>
         /// <param name="configJson">Objeto JSON con la configuración del canal.</param>
         /// <param name="logger">Instancia del logger para registrar eventos.</param>
         /// <param name="siemensControl">Instancia de control para la gestión del módulo.</param>
-        public Siemens(string nodeName, JsonObject configJson, ISdkLogger logger, SiemensControl siemensControl)
+        public Siemens(Guid idChannel, string nodeName, JsonObject configJson, ISdkLogger logger, SiemensControl siemensControl)
         {
             ArgumentNullException.ThrowIfNull(configJson);
             ArgumentNullException.ThrowIfNull(logger);
@@ -67,6 +78,7 @@ namespace SiemensModule
                 throw new ArgumentException("La configuración JSON no puede ser nula o vacía.", nameof(configJson));
             }
 
+            IdChannel = idChannel;
             _nodeName = nodeName;
             _logger = logger;
             _siemensControl = siemensControl;
@@ -96,7 +108,7 @@ namespace SiemensModule
 
             // Inicializa el lector de tags
             var plcConnection = new SiemensTcpStrategy(_config.IpAddress, _config.Rack, _config.Slot);
-            _siemensTagReader = new SiemensTagReader(plcConnection);
+            _siemensTagReader = new SiemensTagReader(plcConnection, _logger);
 
             // Inicializa el planificador de lecturas
             _scheduler = new SiemensScheduler(_logger);
@@ -277,7 +289,7 @@ namespace SiemensModule
                 return "Error: Tag no encontrado.";
             }
 
-            if (tagWrapper.Tag.ClientAccess == ClientAccessOptions.ReadOnly)
+            if (tagWrapper.Config.IsReadOnly)
             {
                 return "Error: El tag es de solo lectura.";
             }
@@ -303,7 +315,10 @@ namespace SiemensModule
             _logger.Information("Siemens", "Dispose: Solicitud de liberación del canal.");
             Stop();
             _channelControl?.Dispose();
-            _scheduler.ReadingDue -= handleReadingDue;
+            if (_scheduler != null)
+            {
+                _scheduler.ReadingDue -= handleReadingDue;
+            }
             _siemensControl.UnregisterChannel(this);
             GC.SuppressFinalize(this);
         }
@@ -321,26 +336,44 @@ namespace SiemensModule
 
             try
             {
-                var results = _siemensTagReader.ReadManyForSdk(e.TagsToRead);
-                processReadResult(results);
+                // Construye el diccionario de wrappers a partir de los IDs de los tags a leer.
+                var tagsToReadWrappers = e.TagsToRead.Keys
+                    .Where(id => _tags.ContainsKey(id))
+                    .ToDictionary(id => id, id => _tags[id]);
+
+                if (tagsToReadWrappers.Any())
+                {
+                    var results = _siemensTagReader.ReadManyForSdk(tagsToReadWrappers);
+                    processReadResult(results);
+                }
             }
             catch (Exception ex)
             {
                 _logger.Error(ex, "Siemens", "Error durante la ejecución del lote de lectura.");
-                // Opcional: Marcar los tags del lote como erróneos.
             }
         }
 
         /// <summary>
         /// Procesa los resultados de una operación de lectura y publica los nuevos valores.
         /// </summary>
-        private void processReadResult(Dictionary<Guid, Sdk.Data.TagReadResult> results)
+        private void processReadResult(Dictionary<Guid, vNode.SiemensS7.TagReader.TagReadResult> results)
         {
             if (!_started) return;
 
             foreach (var kvp in results)
             {
-                PostNewEvent(kvp.Value.Value, kvp.Value.Quality, kvp.Key, kvp.Value.SourceTimestamp.ToFileTimeUtc());
+                // Cada TagReadResult puede contener varios TagReadResultItem (por lotes)
+                if (kvp.Value.Items != null)
+                {
+                    foreach (var item in kvp.Value.Items)
+                    {
+                        PostNewEvent(item.Value, item.ResultCode == vNode.SiemensS7.TagReader.TagReadResult.TagReadResultType.Success
+                            ? QualityCodeOptions.Good_Non_Specific
+                            : QualityCodeOptions.Bad_Non_Specific,
+                            item.BatchItem.Tag.Config.TagId,
+                            item.BatchItem.ReadDueTime.ToFileTimeUtc());
+                    }
+                }
             }
         }
 
@@ -359,7 +392,8 @@ namespace SiemensModule
                 var quality = tag.Status == SiemensTagWrapper.SiemensTagStatusType.ConfigError
                     ? QualityCodeOptions.Bad_Configuration_Error
                     : QualityCodeOptions.Uncertain_Non_Specific;
-                PostNewEvent(tag.Tag.InitialValue, quality, tag.IdTag, timeStamp);
+                // Corregido: SiemensTagConfig no tiene InitialValue, usar tag.CurrentValue
+                PostNewEvent(tag.CurrentValue, quality, tag.Config.TagId, timeStamp);
             }
         }
 
@@ -371,7 +405,7 @@ namespace SiemensModule
             long timeStamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             foreach (var tag in _tags.Values)
             {
-                PostNewEvent(tag.CurrentValue, QualityCodeOptions.Bad_Out_of_Service, tag.IdTag, timeStamp);
+                PostNewEvent(tag.CurrentValue, QualityCodeOptions.Bad_Out_of_Service, tag.Config.TagId, timeStamp);
             }
         }
 
@@ -385,7 +419,6 @@ namespace SiemensModule
             if (_tags.TryGetValue(idTag, out var tag))
             {
                 tag.CurrentValue = value;
-                tag.CurrentQuality = quality;
                 InvokeOnPostNewEvent(new RawData(value, quality, idTag, timeStamp));
             }
         }

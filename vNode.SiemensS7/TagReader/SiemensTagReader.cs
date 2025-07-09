@@ -82,7 +82,7 @@ namespace vNode.SiemensS7.TagReader
         // The error occurs because the `TagReadResult` class does not have a constructor that accepts three arguments.
         // Based on the provided type signatures, we need to use the static methods `CreateFailed` or `CreateSuccess` to create instances of `TagReadResult`.
 
-        public Dictionary<Guid, TagReadResult> ReadManyForSdk(Dictionary<Guid, SiemensTagConfig> tagsToRead)
+        public Dictionary<Guid, TagReadResult> ReadManyForSdk(Dictionary<Guid, SiemensTagWrapper> tagsToRead)
         {
             var results = new Dictionary<Guid, TagReadResult>();
             var stopWatch = new Stopwatch();
@@ -98,16 +98,14 @@ namespace vNode.SiemensS7.TagReader
                 return results;
             }
 
-            //TODO: Continuar corrigiendo errores desde aquí.
-
             // Prepara la lista de variables para S7NetPlus.
             var s7Vars = tagsToRead.Select(kvp => new S7.Net.Types.DataItem
             {
-                DataType = (S7.Net.Types.DataType)Enum.Parse(typeof(S7.Net.Types.DataType), kvp.Value.DataType.ToString()),
+                DataType = (S7.Net.Types.DataType)Enum.Parse(typeof(S7.Net.Types.DataType), kvp.Value.Config.DataType.ToString()),
                 VarType = S7.Net.Types.VarType.DB, // Asumimos DB, se podría extender.
                 DB = 1, // Esto debería ser parte de la dirección parseada.
                 StartByteAdr = 0, // Esto debería ser parte de la dirección parseada.
-                Count = kvp.Value.ArraySize > 0 ? kvp.Value.ArraySize : 1
+                Count = kvp.Value.Config.ArraySize > 0 ? kvp.Value.Config.ArraySize : 1
             }).ToList();
 
             _plcLock.Wait();
@@ -120,18 +118,18 @@ namespace vNode.SiemensS7.TagReader
 
                 // Mapea los resultados de S7NetPlus a los resultados del SDK.
                 int i = 0;
-                foreach (var tagId in tagsToRead.Keys)
+                foreach (var kvp in tagsToRead)
                 {
                     var s7Result = s7Results[i++];
                     var quality = s7Result.IsGood ? QualityCodeOptions.Good_Non_Specific : QualityCodeOptions.Bad_Non_Specific;
 
                     // Use CreateSuccess to create a successful TagReadResult.
-                    var batchItem = new TagReadBatchItem(null!, DateTime.UtcNow)
+                    var batchItem = new TagReadBatchItem(kvp.Value, DateTime.UtcNow)
                     {
                         ActualReadTime = DateTime.UtcNow
                     };
 
-                    results[tagId] = TagReadResult.CreateSuccess(new List<TagReadResultItem>
+                    results[kvp.Key] = TagReadResult.CreateSuccess(new List<TagReadResultItem>
                     {
                         new TagReadResultItem(batchItem, TagReadResult.TagReadResultType.Success, s7Result.Value)
                     });

@@ -1,17 +1,12 @@
 using Newtonsoft.Json;
-using S7.Net;
-using System.IO;
-using System.Runtime.ConstrainedExecution;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using vNode.Sdk.Enum;
 
 namespace vNode.SiemensS7.TagConfig
 {
     public class SiemensTagConfig
     {
-        //vNode necesita un identificador único para cada tag, como parte de la lógica de tu aplicación
-        //(por ejemplo, para mapear tags a dispositivos o realizar diagnósticos).
-        //Este identificador no es proporcionado por S7NetPlus, pero puede ser útil para abstraer 
-        //y gestionar los tags en tu sistema.
         public Guid TagId { get; set; }
 
         [JsonRequired]
@@ -24,15 +19,43 @@ namespace vNode.SiemensS7.TagConfig
         public int ArraySize { get; set; } = 0; // Tamaño de arreglos
 
         [JsonRequired]
-        public int PollRate { get; set; } = -1; // Frecuencia de sondeo
+        public int PollRate { get; set; } = 1000; // Frecuencia de sondeo
 
         [JsonRequired]
         [Newtonsoft.Json.JsonConverter(typeof(JsonStringEnumConverter))]
         public SiemensTagDataType DataType { get; set; } // Tipo de dato
 
+        public bool IsReadOnly { get; set; } // En Siemens, los tags generalmente no son de solo lectura
+
+        public static SiemensTagConfig FromJson(JsonObject json)
+        {
+            var config = new SiemensTagConfig
+            {
+                TagId = Guid.NewGuid(), // Generar un ID único para el tag
+                Address = json["address"]?.ToString() ?? throw new ArgumentException("Falta la dirección del tag"),
+                PollRate = int.Parse(json["pollRate"]?.ToString() ?? "1000"),
+                DataType = Enum.Parse<SiemensTagDataType>(json["dataType"]?.ToString() ?? throw new ArgumentException("Falta el tipo de dato del tag"), true),
+                ArraySize = int.Parse(json["arraySize"]?.ToString() ?? "0"),
+                IsReadOnly = bool.Parse(json["isReadOnly"]?.ToString() ?? "false")
+            };
+
+            if (json.ContainsKey("bitNumber"))
+            {
+                config.BitNumber = byte.Parse(json["bitNumber"].ToString());
+            }
+
+            if (json.ContainsKey("stringSize"))
+            {
+                config.StringSize = byte.Parse(json["stringSize"].ToString());
+            }
+
+            return config;
+        }
+
         public ushort GetSize()
         {
-            ushort typeSize = DataType switch
+            // Lógica para determinar el tamaño del tag basado en el tipo de dato
+            return DataType switch
             {
                 SiemensTagDataType.Bool => 1,
                 SiemensTagDataType.Byte => 1,
@@ -41,18 +64,10 @@ namespace vNode.SiemensS7.TagConfig
                 SiemensTagDataType.Int => 2,
                 SiemensTagDataType.DInt => 4,
                 SiemensTagDataType.Real => 4,
-                SiemensTagDataType.String => (ushort)Math.Ceiling(StringSize / 2.0),
-                _ => throw new System.IO.InvalidDataException($"No se conoce el tamaño para el tipo de dato {DataType}")
+                SiemensTagDataType.String => StringSize,
+                _ => 0,
             };
-
-            if (ArraySize > 0)
-            {
-                return (ushort)(typeSize * ArraySize);
-            }
-            else return typeSize;
         }
-
-        public bool IsReadOnly => false; // En Siemens, los tags generalmente no son de solo lectura
     }
 
     public enum SiemensTagDataType
