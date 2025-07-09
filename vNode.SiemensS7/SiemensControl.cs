@@ -118,9 +118,7 @@ namespace SiemensModule
             InvokeOnPostNewEvent(new RawData(value, QualityCodeOptions.Good_Non_Specific, idTag));
         }   
 
-        private async Task 
-
-        // Implementing RegisterTag method  
+        // Implementing RegisterTag method
         public override bool RegisterTag(TagModelBase tagObject)
         {
             // Add logic to register the tag  
@@ -133,5 +131,4 @@ namespace SiemensModule
             // Add logic to stop the channel  
             return true; // Placeholder implementation  
         }
-    }
-}
+    }}
