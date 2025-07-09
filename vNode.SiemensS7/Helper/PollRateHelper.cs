@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Text.Json;
-using SiemensModule.TagConfig;
+using vNode.SiemensS7.TagConfig;
 using vNode.Sdk.Data;
 
 namespace vNode.SiemensS7.Helper
