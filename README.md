@@ -1,53 +1,81 @@
-# vNode.SiemensS7
+# Módulo de comunicaciones Siemens S7 para vNode Lite
 
-Módulo para **vNode Lite** que permite integrar los PLC Siemens usando la librería [S7NetPlus](https://github.com/S7NetPlus/s7netplus). 
+El repositorio incluye el módulo de comunicaciones para **vNode Lite** capaz de interactuar con **PLC Siemens S7** mediante la biblioteca **S7NetPlus**.  
+El código está desarrollado en **.NET 6** y en esta etapa **compila correctamente**, por lo que ya ofrece las funcionalidades básicas del canal.
 
-## Requisitos
-- .NET 6 SDK.
-- IP, rack y slot de la PLC Siemens.
+---
 
-## Primer objetivo: PollRate
-Antes de organizar los datos por tipo, necesitamos conocer la tasa de **PollRate** (*Scan Rate*) de cada tag. 
-Para ello se siguen las siguientes condicioes:
-1. Tasa de Scan Rate.
-2. Agrupa los tags por `DataType` sin superar los 200 bytes en cada grupo.
+## 📁 Estructura del módulo
 
-## Estructura principal
-- `ChannelConfig/SiemensChannelConfig.cs` define cómo se conectas al PLC y qué tags vas se van leer.
-- `SiemensCommonLayer/S7TcpStrategy.cs` implementa la conexión TCP con S7NetPlus.
-- `TagReader/S7TagReader.cs` lee los tags y convierte los valores.
-- `TagConfig/` agrupa las clases que describen cada tag (`SiemensTagConfig`, `SiemensTagWrapper`, etc.).
-- `Types/s7_tag_definitions.json` es un ejemplo de tags que para probar. (mock, no se usuará así)
+La solución se divide en varias carpetas que agrupan las clases principales:
 
-## Compilación
-Desde la raíz del repositorio ejecuta:
+### `ChannelConfig`
+Gestiona la configuración del canal y de los dispositivos:
 
-```bash
-dotnet build vNode.SiemensS7.sln
-```
+- `SiemensChannelConfig` – lee y valida la configuración general (IP, Rack, Slot, intervalos de lectura y lista de tags).  
+- `SiemensDeviceConfig` – representa cada PLC (ID del dispositivo, IP, Rack, Slot y estado habilitado).  
+- `DevicesDictionaryConverter` – convierte la sección de dispositivos del JSON a un diccionario.  
+- `InvalidChannelConfigException` – se usa para avisar de configuraciones incorrectas.  
 
-## Ejecución de ejemplo
-`Program.cs` carga el archivo `s7_tag_definitions.json` y lee los tags que tengas configurados:
+### `TagConfig`
+Describe cada tag y su dirección dentro del PLC:
 
-```bash
-dotnet run --project vNode.SiemensS7
-```
+- `SiemensTagConfig` – define dirección, tipo de dato, tamaño, `PollRate`, etc.  
+- `SiemensTagWrapper` – encapsula la configuración junto al `TagModelBase` del SDK.  
+- `S7Address` – parsea y valida las direcciones del estilo `DB1.DBW20`.  
 
-Hay que modificar la IP del PLC en `Program.cs` o en la configuración que use `SiemensFactory.CreateTcpConnection` antes de ejecutar, por ahora está hardcodeada.
+### `TagReader`
+Encargado de leer y escribir en el PLC:
 
-## Configuración de Tags
-Cada tag se define mediante estas propiedades:
+- `SiemensTagReader` – realiza lecturas individuales o en lote, convierte valores y controla los resultados.  
+- `SiemensDataConverter` – transforma los datos entre los tipos del PLC y .NET.  
+- `TagReadResult` y `TagReadResultItem` – representan los resultados de la lectura.  
 
-- `DeviceId`: identificador del dispositivo.
-- `DbNumber`: número de datablock.
-- `StartByte`: byte de inicio dentro del DB.
-- `BitNumber`: (opcional) número de bit para tipos `Bool`.
-- `StringSize`: longitud para datos `String`.
-- `ArraySize`: tamaño de array cuando aplique.
-- `PollRate`: intervalo de lectura en milisegundos.
-- `DataType`: tipo de dato (Bool, Int16, Real, etc.).
+### `Scheduler`
+Planifica las lecturas periódicas según el `PollRate` (Scan Rate):
 
-## Estado actual
-El código está en desarrollo y todavía faltan pequeñas tareas de análisis, control de canales y pruebas automatizadas.
+- `SiemensScheduler` – agrupa los tags por tasa de sondeo y dispara el evento `ReadingDue`.  
+- `TagReadBatchItem` – representa cada solicitud programada (dirección, tamaño, tiempo previsto de lectura, etc.).  
 
+### `SiemensCommonLayer`
+Abstrae la comunicación TCP con el PLC:
 
+- `SiemensTcpStrategy` – administra la conexión, las lecturas y las escrituras mediante S7NetPlus.  
+
+### `Diagnostics`
+Registra estadísticas de lectura y escritura:
+
+- `ChannelDiagnostics`, `DeviceDiagnostics` y `TagDiagnostics` – mantienen contadores de operaciones, fallos y tiempos medios.  
+- `DevicePropertyChangedEventArgs` – notifica cambios en las propiedades de un dispositivo.  
+- `SiemensControlTag` – describe los tags de control (habilitar, reiniciar, etc.).  
+
+### Control y factoría
+- `SiemensControl` – coordina varias instancias de canal y expone los tags de control.  
+- `SiemensFactory` – crea canales nuevos y devuelve las configuraciones de esquema y diagnóstico.  
+
+### Otras utilidades
+- `PollRateHelper` – extrae el `PollRate` de la configuración de un tag.  
+- En `Types/s7_tag_definitions.json` se incluye un ejemplo de definiciones de tags.  
+
+---
+
+## 🚀 Uso básico
+
+El canal principal está implementado en `Siemens.cs`. Al instanciarlo, se pasa la configuración en JSON siguiendo el modelo de `SiemensChannelConfig`.  
+Una vez configurado, es posible:
+
+1. Registrar tags con `RegisterTag`.  
+2. Iniciar el canal mediante `Start` para que el planificador comience a leer según el `PollRate`.  
+3. Escribir valores en el PLC usando `SetTagValue`.  
+
+---
+
+## ✅ Estado actual
+
+Todas las clases mencionadas se encuentran implementadas y el proyecto **compila sin errores**, ofreciendo las funciones básicas de **lectura/escritura** y **diagnóstico**.
+
+---
+
+## 📌 Próximos pasos
+
+El siguiente hito consiste en comprobar el comportamiento del módulo interactuando con los procesos `Node.exe`, `Backend.exe` y el Frontend, asegurando que la comunicación funciona de forma integrada dentro de **vNode**.
