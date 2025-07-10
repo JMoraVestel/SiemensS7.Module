@@ -1,19 +1,32 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using vNode.Sdk.Enum;
+using vNode.Sdk.Logger;
+using vNode.SiemensS7.ChannelConfig;
+using vNode.SiemensS7.Scheduler;
 using vNode.SiemensS7.SiemensCommonLayer;
 using vNode.SiemensS7.TagConfig;
+using static vNode.SiemensS7.TagReader.TagReadResult;
 
 namespace vNode.SiemensS7.TagReader
 {
     public class SiemensTagReader
     {
         private readonly SiemensTcpStrategy _connection;
+        private readonly SiemensChannelConfig _channelConfig;
+        private readonly ISdkLogger _logger;
+        private readonly SemaphoreSlim _s7Lock = new SemaphoreSlim(1, 1);
 
-        public SiemensTagReader(SiemensTcpStrategy connection)
+        public SiemensTagReader(SiemensTcpStrategy connection, SiemensChannelConfig channelConfig, ISdkLogger logger)
         {
             _connection = connection ?? throw new ArgumentNullException(nameof(connection));
+            _channelConfig = channelConfig ?? throw new ArgumentNullException(nameof(channelConfig));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         public Dictionary<string, object> ReadTags(IEnumerable<SiemensTagWrapper> tags)
@@ -27,14 +40,64 @@ namespace vNode.SiemensS7.TagReader
                 try
                 {
                     var raw = _connection.Read(tag.Config.Address);
-                    var value = ConvertValue(raw, tag.Config.DataType.ToString());
-                    results[tagName. = value;
+                    var value = SiemensDataConverter.ConvertFromPlc(tag.Config, raw);
+                    results[tagName] = value;
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[Error] {tagName} ({tag.Config.Address}): {ex.Message}");
+                    _logger.Error(ex, "SiemensTagReader", $"Error al leer el tag '{tagName}' ({tag.Config.Address}).");
                     results[tagName] = null;
                 }
+            }
+
+            return results;
+        }
+
+        /// <summary>
+        /// Lee un lote de tags y devuelve los resultados en el formato esperado por el SDK.
+        /// </summary>
+        /// <param name="tagsToRead">Diccionario de tags a leer.</param>
+        /// <returns>Un diccionario que contiene los resultados de la lectura.</returns>
+        public Dictionary<Guid, TagReadResult> ReadManyForSdk(Dictionary<Guid, SiemensTagWrapper> tagsToRead)
+        {
+            var results = new Dictionary<Guid, TagReadResult>();
+            var successfulItems = new List<TagReadResultItem>();
+            var failedItems = new List<TagReadBatchItem>();
+
+            // Nota: Para un rendimiento óptimo, esta lógica debería agrupar las variables y
+            // leerlas en una sola solicitud usando `ReadMultipleVars` de S7.Net.
+            // La implementación actual lee las variables una por una.
+            foreach (var tagWrapper in tagsToRead.Values)
+            {
+                // El tiempo de lectura (`ReadDueTime`) debería venir idealmente del planificador.
+                // Como no está disponible, usamos el tiempo actual.
+                var batchItem = new TagReadBatchItem(tagWrapper, DateTime.UtcNow);
+
+                try
+                {
+                    var rawValue = _connection.Read(tagWrapper.Config.Address);
+                    var convertedValue = SiemensDataConverter.ConvertFromPlc(tagWrapper.Config, rawValue);
+                    var resultItem = new TagReadResultItem(batchItem, (TagReadResultType) convertedValue, TagReadResult.TagReadResultType.Success);
+                    successfulItems.Add(resultItem);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, "SiemensTagReader", $"Error al leer el tag '{tagWrapper.Name}' ({tagWrapper.Config.Address}).");
+                    failedItems.Add(batchItem);
+                }
+            }
+
+            // Agrupa todos los resultados exitosos en un solo objeto TagReadResult.
+            if (successfulItems.Any())
+            {
+                // La clave del diccionario no se usa en `processReadResult`, por lo que un nuevo Guid es suficiente.
+                results[Guid.NewGuid()] = TagReadResult.CreateSuccess(successfulItems);
+            }
+
+            // Agrupa todos los fallos en otro objeto TagReadResult.
+            if (failedItems.Any())
+            {
+                results[Guid.NewGuid()] = TagReadResult.CreateFailed(TagReadResult.TagReadResultType.OtherError, failedItems);
             }
 
             return results;
@@ -152,76 +215,46 @@ namespace vNode.SiemensS7.TagReader
             return result;
         }
 
-        //TODO: Continue here following anda adapting from the Modbus module
         public async Task<bool> WriteTagAsync(SiemensTagWrapper tag, object value)
         {
-
             if (tag.Tag.ClientAccess == ClientAccessOptions.ReadOnly)
             {
-                throw new ArgumentException("Tag is read-only");
+                _logger.Warning("SiemensTagReader", $"Intento de escritura en el tag de solo lectura '{tag.Name}'.");
+                throw new ArgumentException("El tag es de solo lectura.");
             }
 
             if (tag.Config.IsReadOnly)
             {
-                throw new ArgumentException($"Siemens address {tag.Config.Address} is read-only");
+                _logger.Warning("SiemensTagReader", $"Intento de escritura en la dirección de solo lectura '{tag.Config.Address}'.");
+                throw new ArgumentException($"La dirección Siemens {tag.Config.Address} es de solo lectura.");
             }
 
-            var deviceConfig = _channelConfig.Devices[tag.Config.DeviceId];
-
-            if (deviceConfig == null) //device to read is not configured in this channel
-            {
-                _logger.Error("Modbus", $"Device ID {tag.Config.DeviceId} is not configured in this channel.");
-                throw new ArgumentOutOfRangeException("Invalid Device Id {tag.Config.DeviceId}");
-
-            }
-
-            var modbusType = tag.Config.RegisterAddress.Type;
-            ushort[] registers = Array.Empty<ushort>();
-            bool coil = false;
-            bool writeToRegister = modbusType == ModbusType.InputRegister || modbusType == ModbusType.HoldingRegister;
-
-            if (writeToRegister)
-            {
-                if (!_parser.TryGetRegisters(tag, value, deviceConfig.SwapConfig, out registers))
-                {
-                    throw new InvalidDataException("Unable to parse value");
-                }
-            }
-            else // is a coil
-            {
-                if (!ModbusDataConverter.TryParseBool(value, out coil))
-                {
-                    throw new InvalidDataException("Unable to parse value into a boolean");
-                }
-            }
-
-
-            _writePending = true;
-            await _modbusLock.WaitAsync();
+            object valueToWrite;
             try
             {
-                //var rawAddress = GetRawAddress(tag.Config.RegisterAddress);
-                if (writeToRegister)
-                {
-                    await _modbusConnection.WriteHoldingRegistersAsync(deviceConfig.ModbusSlaveId,
-                        deviceConfig.EnableModbusFunction6, (tag.Config.RegisterAddress.Offset), registers);
-                }
-                else
-                {
-                    await _modbusConnection.WriteOutputCoilsAsync(deviceConfig.ModbusSlaveId,
-                        (tag.Config.RegisterAddress.Offset), new bool[] { coil });
-                }
+                valueToWrite = SiemensDataConverter.ConvertToPlc(tag.Config, value);
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "ModbusTagReader", $"Error writing to Modbus device: {ex.Message}");
-
+                _logger.Error(ex, "SiemensTagReader", $"No se pudo convertir el valor '{value}' para el tag '{tag.Name}'.");
+                throw new InvalidDataException("No se pudo procesar el valor para la escritura.", ex);
             }
 
+            await _s7Lock.WaitAsync();
+            try
+            {
+                await Task.Run(() => _connection.Write(tag.Config.Address, valueToWrite));
+                _logger.Information("SiemensTagReader", $"Escritura exitosa en el tag '{tag.Name}' (Dirección: {tag.Config.Address}).");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "SiemensTagReader", $"Error al escribir en el dispositivo S7: {ex.Message}");
+                // Relanzar para que la capa superior pueda manejar el error de comunicación.
+                throw;
+            }
             finally
             {
-                _modbusLock.Release();
-                _writePending = false;
+                _s7Lock.Release();
             }
 
             return true;

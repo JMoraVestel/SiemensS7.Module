@@ -14,7 +14,6 @@ namespace vNode.SiemensS7.TagConfig
         /// </summary>
         public string DbName { get; private set; }
 
-
         /// <summary>
         /// Define las áreas de memoria disponibles en un PLC Siemens S7,
         /// según los códigos de tipo utilizados por el protocolo S7.
@@ -28,6 +27,11 @@ namespace vNode.SiemensS7.TagConfig
             Counter = 28,
             Timer = 29
         }
+
+        /// <summary>
+        /// Tipo de dato asociado a la dirección.
+        /// </summary>
+        public string DataTypeValue { get; private set; }
 
         /// <summary>
         /// Desplazamiento (offset) dentro del bloque de datos.
@@ -65,14 +69,14 @@ namespace vNode.SiemensS7.TagConfig
             var s7Addr = new S7Address
             {
                 DbName = match.Groups[1].Value.ToUpper(),
-                DataType = match.Groups[2].Value.ToUpper(),
+                DataTypeValue = match.Groups[2].Value.ToUpper(),
                 Offset = int.Parse(match.Groups[3].Value)
             };
 
             // Si hay un bit, se añade al tipo de dato para mantener la información.
             if (match.Groups[4].Success)
             {
-                s7Addr.DataType += match.Groups[4].Value;
+                s7Addr.DataTypeValue += match.Groups[4].Value;
             }
 
             return s7Addr;
