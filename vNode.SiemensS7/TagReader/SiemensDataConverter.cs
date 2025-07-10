@@ -132,5 +132,10 @@ namespace vNode.SiemensS7.TagReader
                 return false;
             }
         }
+
+        internal static object ConvertToPlc(SiemensTagConfig config, object newValue)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

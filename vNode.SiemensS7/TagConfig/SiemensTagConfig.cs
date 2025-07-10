@@ -7,6 +7,8 @@ namespace vNode.SiemensS7.TagConfig
 {
     public class SiemensTagConfig
     {
+        public string Name { get; set; }
+
         public Guid TagId { get; set; }
 
         [JsonRequired]

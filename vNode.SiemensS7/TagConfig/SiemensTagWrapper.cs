@@ -3,11 +3,13 @@ using vNode.Sdk.Logger;
 
 namespace vNode.SiemensS7.TagConfig
 {
-    public class SiemensTagWrapper
+    public class SiemensTagWrapper: SiemensTagConfig 
     {
+        
         private readonly SiemensTagConfig _config;
         private readonly TagModelBase _tag;
         public SiemensTagConfig Config => _config;
+        public string Name => base.Name;
         public object? CurrentValue { get; set; }
         public SiemensTagStatusType Status { get; private set; } = SiemensTagStatusType.NotInitialized;
 
@@ -130,21 +132,14 @@ namespace vNode.SiemensS7.TagConfig
 
             try
             {
-                // Utilizar la clase S7Address para analizar la dirección
-                var parsedAddress = S7Address.Parse(address);
-
-                // Validar que los valores analizados sean correctos
-                if (string.IsNullOrWhiteSpace(parsedAddress.DbName) || 
-                            string.IsNullOrWhiteSpace(parsedAddress.DataType) || parsedAddress.Offset < 0)
-                {
-                    throw new ArgumentException($"Invalid address format: {address}");
-                }
-
-                return parsedAddress; // Retornar el objeto S7Address como resultado válido
+                // Utilizar la clase S7Address para analizar la dirección.
+                // Se confía en que S7Address.Parse realiza toda la validación necesaria.
+                return S7Address.Parse(address);
             }
             catch (Exception ex)
             {
-                throw new ArgumentException($"Error parsing address: {ex.Message}", nameof(address));
+                // Capturamos la excepción de S7Address.Parse y la relanzamos con más contexto.
+                throw new ArgumentException($"Error parsing address '{address}': {ex.Message}", ex);
             }
         }
 

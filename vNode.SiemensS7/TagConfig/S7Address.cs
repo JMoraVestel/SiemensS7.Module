@@ -14,10 +14,20 @@ namespace vNode.SiemensS7.TagConfig
         /// </summary>
         public string DbName { get; private set; }
 
+
         /// <summary>
-        /// Tipo de dato. Ejemplo: "DBW", "DBX".
+        /// Define las áreas de memoria disponibles en un PLC Siemens S7,
+        /// según los códigos de tipo utilizados por el protocolo S7.
         /// </summary>
-        public string DataType { get; private set; }
+        public enum DataType
+        {
+            Input = 129,
+            Output = 130,
+            Memory = 131,
+            DataBlock = 132,
+            Counter = 28,
+            Timer = 29
+        }
 
         /// <summary>
         /// Desplazamiento (offset) dentro del bloque de datos.

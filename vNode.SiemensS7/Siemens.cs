@@ -108,7 +108,7 @@ namespace SiemensModule
 
             // Inicializa el lector de tags
             var plcConnection = new SiemensTcpStrategy(_config.IpAddress, _config.Rack, _config.Slot);
-            _siemensTagReader = new SiemensTagReader(plcConnection, _logger);
+            _siemensTagReader = new SiemensTagReader(plcConnection);
 
             // Inicializa el planificador de lecturas
             _scheduler = new SiemensScheduler(_logger);
