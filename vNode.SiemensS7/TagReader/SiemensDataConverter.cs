@@ -1,141 +1,91 @@
 ﻿using System;
-using System.Collections.Generic;
-using vNode.Sdk.Enum;
-using vNode.Sdk.Logger;
+using System.Globalization;
+using System.Text;
 using vNode.SiemensS7.TagConfig;
 
 namespace vNode.SiemensS7.TagReader
 {
-    public class SiemensDataConverter
+    public static class SiemensDataConverter
     {
-        private readonly ISdkLogger _logger;
-
-        public SiemensDataConverter(ISdkLogger logger)
+        /// <summary>
+        /// Convierte un valor leído del PLC a un tipo de dato de .NET.
+        /// </summary>
+        public static object ConvertFromPlc(SiemensTagConfig config, object rawValue)
         {
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            if (rawValue == null) return null;
+
+            switch (config.DataType)
+            {
+                case SiemensTagDataType.Bool:
+                    return (bool)rawValue;
+                case SiemensTagDataType.Byte:
+                    return (byte)rawValue;
+                case SiemensTagDataType.Word:
+                    return (ushort)rawValue;
+                case SiemensTagDataType.DWord:
+                    return (uint)rawValue;
+                case SiemensTagDataType.Int:
+                    return (short)rawValue;
+                case SiemensTagDataType.DInt:
+                    return (int)rawValue;
+                case SiemensTagDataType.Real:
+                    // El valor viene como uint, hay que convertirlo a array de bytes y luego a float.
+                    if (rawValue is uint uintVal)
+                    {
+                        return BitConverter.ToSingle(BitConverter.GetBytes(uintVal), 0);
+                    }
+                    return Convert.ToSingle(rawValue);
+                case SiemensTagDataType.String:
+                    if (rawValue is byte[] bytes)
+                    {
+                        if (bytes.Length < 2) return "";
+                        int len = bytes[1]; // Longitud actual de la cadena.
+                        return Encoding.ASCII.GetString(bytes, 2, len);
+                    }
+                    return rawValue.ToString();
+                // Añadir aquí otros tipos de datos si es necesario (DATE, TIME, etc.)
+                default:
+                    return rawValue;
+            }
         }
 
-        public static bool TryParseBool(object value, out bool result)
+        /// <summary>
+        /// Convierte un valor de .NET al tipo de dato esperado por el PLC para su escritura.
+        /// </summary>
+        public static object ConvertToPlc(SiemensTagConfig config, object value)
         {
-            result = false;
-
             if (value == null)
-                return false;
-
-            if (value is bool boolValue)
-            {
-                result = boolValue;
-                return true;
-            }
+                throw new ArgumentNullException(nameof(value), "El valor a escribir no puede ser nulo.");
 
             try
             {
-                double numValue = Convert.ToDouble(value);
-                result = numValue != 0;
-                return true;
-            }
-            catch
-            {
-                // Not a numeric type, continue
-            }
-
-            if (value is string stringValue)
-            {
-                if (bool.TryParse(stringValue, out result))
-                    return true;
-
-                if (double.TryParse(stringValue, out double numericValue))
+                switch (config.DataType)
                 {
-                    result = numericValue != 0;
-                    return true;
+                    case SiemensTagDataType.Bool:
+                        return Convert.ToBoolean(value);
+                    case SiemensTagDataType.Byte:
+                        return Convert.ToByte(value);
+                    case SiemensTagDataType.Word:
+                        return Convert.ToUInt16(value);
+                    case SiemensTagDataType.DWord:
+                        return Convert.ToUInt32(value);
+                    case SiemensTagDataType.Int:
+                        return Convert.ToInt16(value);
+                    case SiemensTagDataType.DInt:
+                        return Convert.ToInt32(value);
+                    case SiemensTagDataType.Real:
+                        return Convert.ToSingle(value);
+                    case SiemensTagDataType.String:
+                        return value.ToString();
+                    // Añadir aquí otros tipos de datos si es necesario
+                    default:
+                        throw new NotSupportedException($"El tipo de dato '{config.DataType}' no está soportado para escritura.");
                 }
             }
-
-            return false;
-        }
-
-        public static bool ParseBool(object value, bool defaultValue = false)
-        {
-            return TryParseBool(value, out bool result) ? result : defaultValue;
-        }
-
-        public object ConvertToSiemensType(object value, SiemensTagDataType targetType)
-        {
-            if (value == null)
-                throw new ArgumentNullException(nameof(value));
-
-            try
-            {
-                return targetType switch
-                {
-                    SiemensTagDataType.Bool => Convert.ToBoolean(value),
-                    SiemensTagDataType.Byte => Convert.ToByte(value),
-                    SiemensTagDataType.Word => Convert.ToUInt16(value),
-                    SiemensTagDataType.DWord => Convert.ToUInt32(value),
-                    SiemensTagDataType.Int => Convert.ToInt16(value),
-                    SiemensTagDataType.DInt => Convert.ToInt32(value),
-                    SiemensTagDataType.Real => Convert.ToSingle(value),
-                    SiemensTagDataType.String => value.ToString(),
-                    _ => throw new NotSupportedException($"Unsupported Siemens data type: {targetType}")
-                };
-            }
             catch (Exception ex)
             {
-                _logger.Error("SiemensDataConverter", $"Error converting value to Siemens type {targetType}: {ex.Message}");
-                throw;
+                throw new ArgumentException($"No se pudo convertir el valor '{value}' al tipo de dato Siemens '{config.DataType}'.", ex);
             }
-        }
-
-        public object ParseFromSiemensType(object value, SiemensTagDataType sourceType)
-        {
-            if (value == null)
-                throw new ArgumentNullException(nameof(value));
-
-            try
-            {
-                return sourceType switch
-                {
-                    SiemensTagDataType.Bool => Convert.ToBoolean(value),
-                    SiemensTagDataType.Byte => Convert.ToByte(value),
-                    SiemensTagDataType.Word => Convert.ToUInt16(value),
-                    SiemensTagDataType.DWord => Convert.ToUInt32(value),
-                    SiemensTagDataType.Int => Convert.ToInt16(value),
-                    SiemensTagDataType.DInt => Convert.ToInt32(value),
-                    SiemensTagDataType.Real => Convert.ToSingle(value),
-                    SiemensTagDataType.String => value.ToString(),
-                    _ => throw new NotSupportedException($"Unsupported Siemens data type: {sourceType}")
-                };
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("SiemensDataConverter", $"Error parsing value from Siemens type {sourceType}: {ex.Message}");
-                throw;
-            }
-        }
-
-        public bool TryConvertArrayToSiemensType(object[] arrayValues, SiemensTagDataType targetType, out object[] convertedValues)
-        {
-            convertedValues = null;
-
-            try
-            {
-                convertedValues = new object[arrayValues.Length];
-                for (int i = 0; i < arrayValues.Length; i++)
-                {
-                    convertedValues[i] = ConvertToSiemensType(arrayValues[i], targetType);
-                }
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.Error("SiemensDataConverter", $"Error converting array to Siemens type {targetType}: {ex.Message}");
-                return false;
-            }
-        }
-
-        internal static object ConvertToPlc(SiemensTagConfig config, object newValue)
-        {
-            throw new NotImplementedException();
         }
     }
 }

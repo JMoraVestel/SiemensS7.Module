@@ -1,7 +1,6 @@
 using Newtonsoft.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
-using vNode.Sdk.Enum;
 
 namespace vNode.SiemensS7.TagConfig
 {
@@ -11,29 +10,32 @@ namespace vNode.SiemensS7.TagConfig
 
         public Guid TagId { get; set; }
 
-        [JsonRequired]
-        public string Address { get; set; } // Dirección en el PLC
+        [Newtonsoft.Json.JsonRequired]
+        public string Address { get; set; } // Dirección en el PLC  
 
-        public byte? BitNumber { get; set; } // Para tipos BOOL
+        public byte? BitNumber { get; set; } // Para tipos BOOL  
 
-        public byte StringSize { get; set; } // Tamaño de cadenas
+        public byte StringSize { get; set; } // Tamaño de cadenas  
 
-        public int ArraySize { get; set; } = 0; // Tamaño de arreglos
+        public int ArraySize { get; set; } = 0; // Tamaño de arreglos  
 
-        [JsonRequired]
-        public int PollRate { get; set; } = 1000; // Frecuencia de sondeo
+        [Newtonsoft.Json.JsonRequired]
+        public int PollRate { get; set; } = 1000; // Frecuencia de sondeo  
 
-        [JsonRequired]
+        [Newtonsoft.Json.JsonRequired]
         [Newtonsoft.Json.JsonConverter(typeof(JsonStringEnumConverter))]
-        public SiemensTagDataType DataType { get; set; } // Tipo de dato
+        public SiemensTagDataType DataType { get; set; } // Tipo de dato  
 
-        public bool IsReadOnly { get; set; } // En Siemens, los tags generalmente no son de solo lectura
+        public bool IsReadOnly { get; set; } // En Siemens, los tags generalmente no son de solo lectura  
+
+        [Newtonsoft.Json.JsonRequired]
+        public string DeviceId { get; set; }
 
         public static SiemensTagConfig FromJson(JsonObject json)
         {
             var config = new SiemensTagConfig
             {
-                TagId = Guid.NewGuid(), // Generar un ID único para el tag
+                TagId = Guid.NewGuid(), // Generar un ID único para el tag  
                 Address = json["address"]?.ToString() ?? throw new ArgumentException("Falta la dirección del tag"),
                 PollRate = int.Parse(json["pollRate"]?.ToString() ?? "1000"),
                 DataType = Enum.Parse<SiemensTagDataType>(json["dataType"]?.ToString() ?? throw new ArgumentException("Falta el tipo de dato del tag"), true),
@@ -56,7 +58,7 @@ namespace vNode.SiemensS7.TagConfig
 
         public ushort GetSize()
         {
-            // Lógica para determinar el tamaño del tag basado en el tipo de dato
+            // Lógica para determinar el tamaño del tag basado en el tipo de dato  
             return DataType switch
             {
                 SiemensTagDataType.Bool => 1,

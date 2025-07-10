@@ -95,7 +95,7 @@ namespace SiemensModule
         {
             _logger.Information("Siemens",
                 "initializeChannel-> Leyendo configuración. Configuración del canal:\n" +
-                JsonHelper.PrettySerialize(configJson));
+                JsonSerializer.Serialize(configJson, new JsonSerializerOptions { WriteIndented = true }));
             try
             {
                 _config = SiemensChannelConfig.FromJson(configJson);

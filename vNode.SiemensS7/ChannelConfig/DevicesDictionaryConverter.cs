@@ -9,7 +9,7 @@ namespace vNode.SiemensS7.ChannelConfig
     /// Convierte un array de objetos de dispositivo Siemens desde JSON a un diccionario,
     /// utilizando el DeviceId como clave.
     /// </summary>
-    public class DeviceDictionaryConverter : JsonConverter<Dictionary<string, SiemensDeviceConfig>>
+    public class DevicesDictionaryConverter : JsonConverter<Dictionary<string, SiemensDeviceConfig>>
     {
         public override void Write(Utf8JsonWriter writer, Dictionary<string, SiemensDeviceConfig> value, JsonSerializerOptions options)
         {

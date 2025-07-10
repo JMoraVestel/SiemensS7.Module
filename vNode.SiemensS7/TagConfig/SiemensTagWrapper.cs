@@ -1,4 +1,5 @@
-﻿using vNode.Sdk.Data;
+﻿using Newtonsoft.Json;
+using vNode.Sdk.Data;
 using vNode.Sdk.Logger;
 
 namespace vNode.SiemensS7.TagConfig
@@ -12,6 +13,7 @@ namespace vNode.SiemensS7.TagConfig
         public SiemensTagConfig Config => _config;
         public string Name => base.Name;
         public object? CurrentValue { get; set; }
+
         public SiemensTagStatusType Status { get; private set; } = SiemensTagStatusType.NotInitialized;
 
         public enum SiemensTagStatusType
