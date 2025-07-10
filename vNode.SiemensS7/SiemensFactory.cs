@@ -1,4 +1,5 @@
-﻿using SiemensModule;
+using SiemensModule;
+using System.Text.Json.Nodes;
 using vNode.Sdk.Base;
 using vNode.Sdk.Data;
 using vNode.Sdk.Logger;
@@ -7,12 +8,12 @@ namespace vNode.SiemensS7
 {
     public class SiemensFactory : BaseChannelFactory
     {
-        private SiemensControl _logger;
+        private SiemensControl? _control;
 
-        //TODO: Es necesario?
+        // Inicializa el control del módulo
         public override void InitializeControlChannel(ISdkLogger logger)
         {
-             _logger = new SiemensControl(logger);
+            _control = new SiemensControl(logger);
         }
 
         public override string GetModuleName()
@@ -22,14 +23,15 @@ namespace vNode.SiemensS7
 
         public override BaseChannelControl CreateBaseChannelControl(ISdkLogger logger)
         {
-            // Implement logic for creating BaseChannelControl  
-            return new SiemensChannelControl(logger);
+            // Crea la instancia de control del canal
+            return _control ?? new SiemensControl(logger);
         }
 
         public override BaseChannel CreateBaseChannel(string nodeName, string config, ISdkLogger loggerEx)
         {
-            // Implement logic for creating BaseChannel  
-            return new SiemensChannel(nodeName, config, loggerEx);
+            // Crea una nueva instancia del canal Siemens
+            var json = JsonNode.Parse(config) as JsonObject ?? new JsonObject();
+            return new Siemens(Guid.NewGuid(), nodeName, json, loggerEx, _control ?? new SiemensControl(loggerEx));
         }
 
         public override string GetChannelSchema()
@@ -70,14 +72,8 @@ namespace vNode.SiemensS7
 
         public override string SanitizeChannelConfiguration(string configuration)
         {
-            // Implement logic to sanitize channel configuration  
+            // Implement logic to sanitize channel configuration
             return configuration.Trim();
-        }
-
-        public override void InitializeControlChannel(ISdkLogger logger)
-        {
-            // Implement logic to initialize control channel  
-            logger.LogInfo("Control channel initialized.");
         }
     }
 }
