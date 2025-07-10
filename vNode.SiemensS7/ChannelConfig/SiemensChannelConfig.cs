@@ -1,4 +1,5 @@
 ﻿using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 namespace vNode.SiemensS7.ChannelConfig
 {
@@ -9,6 +10,11 @@ namespace vNode.SiemensS7.ChannelConfig
         public short Slot { get; set; } = 1;
         public int PollingIntervalMs { get; set; } = 1000;
         public List<TagConfig.SiemensTagConfig> Tags { get; set; }
+
+        [JsonPropertyName("Devices")]
+        [JsonConverter(typeof(DevicesDictionaryConverter))]
+        public Dictionary<string, SiemensDeviceConfig> Devices { get; set; } =
+            new();
 
         public static SiemensChannelConfig FromJson(JsonObject json)
         {

@@ -5,8 +5,7 @@ namespace vNode.SiemensS7.SiemensCommonLayer
 {
     public class SiemensTcpStrategy
     {
-        public Plc Plc { get; private set; }
-
+        public Plc Plc { get; set; }
         public string Ip { get; }
         public short Rack { get; }
         public short Slot { get; }
@@ -16,50 +15,39 @@ namespace vNode.SiemensS7.SiemensCommonLayer
             Ip = ip;
             Rack = rack;
             Slot = slot;
-
-            Plc = new Plc(CpuType.S71200, ip, rack, slot);
+            Plc = new Plc(CpuType.S71500, Ip, Rack, Slot);
         }
 
         public void Connect()
         {
-            if (Plc.IsConnected)
-                return;
-
-            try
+            if (!Plc.IsConnected)
             {
                 Plc.Open();
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException($"No se pudo establecer conexión con el PLC: {ex.Message}", ex);
             }
         }
 
         public object Read(string address)
         {
-            if (!Plc.IsConnected)
-                throw new InvalidOperationException("No hay conexión con el PLC.");
-            try
-            {
-                return Plc.Read(address);
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException($"Error al leer el tag '{address}': {ex.Message}", ex);
-            }
+            Connect();
+            return Plc.Read(address);
+        }
+
+        /// <summary>
+        /// Escribe un valor en la dirección especificada del PLC.
+        /// </summary>
+        /// <param name="address">La dirección de memoria del PLC (ej. "DB1.DBW20").</param>
+        /// <param name="value">El valor a escribir.</param>
+        public void Write(string address, object value)
+        {
+            Connect();
+            Plc.Write(address, value);
         }
 
         public void Disconnect()
         {
-            try
+            if (Plc.IsConnected)
             {
-                if (Plc.IsConnected)
-                    Plc.Close();
-            }
-            catch (Exception ex)
-            {
-                // Se permite fallo silencioso en desconexión
-                Console.WriteLine("Error al cerrar conexión: " + ex.Message);
+                Plc.Close();
             }
         }
 

@@ -156,14 +156,14 @@ namespace vNode.SiemensS7.TagReader
         public async Task<bool> WriteTagAsync(SiemensTagWrapper tag, object value)
         {
 
-            if (tag..ClientAccess == ClientAccessOptions.ReadOnly)
+            if (tag.Tag.ClientAccess == ClientAccessOptions.ReadOnly)
             {
                 throw new ArgumentException("Tag is read-only");
             }
 
             if (tag.Config.IsReadOnly)
             {
-                throw new ArgumentException($"Modbus address {tag.Config.RegisterAddress} is read-only");
+                throw new ArgumentException($"Siemens address {tag.Config.Address} is read-only");
             }
 
             var deviceConfig = _channelConfig.Devices[tag.Config.DeviceId];

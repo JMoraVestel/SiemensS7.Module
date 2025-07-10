@@ -108,7 +108,7 @@ namespace SiemensModule
 
             // Inicializa el lector de tags
             var plcConnection = new SiemensTcpStrategy(_config.IpAddress, _config.Rack, _config.Slot);
-            _siemensTagReader = new SiemensTagReader(plcConnection);
+            _siemensTagReader = new SiemensTagReader(plcConnection, _config, _logger);
 
             // Inicializa el planificador de lecturas
             _scheduler = new SiemensScheduler(_logger);
@@ -284,26 +284,68 @@ namespace SiemensModule
         /// <returns>Un string indicando el resultado de la operación.</returns>
         public override async Task<string> SetTagValue(Guid idTag, object newValue)
         {
+            _logger.Debug("Siemens", $"Iniciando escritura del valor '{newValue}' en el tag ID '{idTag}'.");
+
+            // Primero, verifica si es un tag de control.
+            if (_controlTagsDictionary.TryGetValue(idTag, out var controlTag))
+            {
+                // Asumimos que los tags de control no son de solo lectura, pero se podría añadir validación.
+                _logger.Warning("Siemens", $"La escritura en tags de control (ID: {idTag}) no está implementada.");
+                return "Error: La escritura en tags de control no está soportada actualmente.";
+            }
+
+            // Si no es un tag de control, es un tag de datos.
             if (!_tags.TryGetValue(idTag, out var tagWrapper))
             {
+                _logger.Error("Siemens", $"No se pudo escribir en el tag. ID no encontrado: {idTag}.");
                 return "Error: Tag no encontrado.";
             }
 
             if (tagWrapper.Config.IsReadOnly)
             {
+                _logger.Warning("Siemens", $"No se puede escribir en el tag. El tag (ID: {idTag}, Dirección: {tagWrapper.Config.Address}) es de solo lectura.");
                 return "Error: El tag es de solo lectura.";
             }
 
+            var stopWatch = new Stopwatch();
+            stopWatch.Start();
+
             try
             {
-                await _siemensTagReader.WriteTagAsync(tagWrapper.Config, newValue);
-                PostNewEvent(newValue, QualityCodeOptions.Good_Non_Specific, idTag);
-                return "Ok";
+                // Utiliza el SiemensTagReader para escribir en el PLC.
+                bool success = await _siemensTagReader.WriteTagAsync(tagWrapper, newValue);
+                stopWatch.Stop();
+
+                if (success)
+                {
+                    _channelControl.WriteCompleted(tagWrapper.Config.TagId, true, stopWatch.ElapsedMilliseconds);
+                    _logger.Debug("Siemens", $"Escritura del tag exitosa. Elapsed: {stopWatch.ElapsedMilliseconds}ms");
+                    
+                    // Publica el nuevo valor para que los suscriptores lo reciban.
+                    PostNewEvent(newValue, QualityCodeOptions.Good_Non_Specific, tagWrapper.Config.TagId);
+                    return "Ok";
+                }
+                else
+                {
+                    // Caso en que WriteTagAsync devuelve false sin lanzar una excepción.
+                    _channelControl.WriteCompleted(tagWrapper.Config.TagId, false, stopWatch.ElapsedMilliseconds);
+                    _logger.Error("Siemens", $"La escritura en el tag (ID: {idTag}) falló sin una excepción. Elapsed: {stopWatch.ElapsedMilliseconds}ms");
+                    return "Error: La operación de escritura falló.";
+                }
+            }
+            catch (Exception ex) when (ex is ArgumentException || ex is InvalidDataException)
+            {
+                stopWatch.Stop();
+                _channelControl.WriteCompleted(tagWrapper.Config.TagId, false, stopWatch.ElapsedMilliseconds);
+                _logger.Error(ex, "Siemens", $"Error de datos al escribir en el tag (ID: {idTag}). Elapsed: {stopWatch.ElapsedMilliseconds}ms");
+                return $"Error: {ex.Message}";
             }
             catch (Exception ex)
             {
-                _logger.Error(ex, "Siemens", $"Error al escribir en el tag {idTag}.");
-                return $"Error: {ex.Message}";
+                stopWatch.Stop();
+                _channelControl.WriteCompleted(tagWrapper.Config.TagId, false, stopWatch.ElapsedMilliseconds);
+                _logger.Error(ex, "Siemens", $"Error inesperado al escribir en el tag (ID: {idTag}). Elapsed: {stopWatch.ElapsedMilliseconds}ms");
+                return "Error: Ocurrió un error inesperado. Revise los logs para más detalles.";
             }
         }
 

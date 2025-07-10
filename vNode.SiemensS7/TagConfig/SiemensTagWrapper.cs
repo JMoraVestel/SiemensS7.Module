@@ -8,6 +8,7 @@ namespace vNode.SiemensS7.TagConfig
         
         private readonly SiemensTagConfig _config;
         private readonly TagModelBase _tag;
+        public TagModelBase Tag => _tag;
         public SiemensTagConfig Config => _config;
         public string Name => base.Name;
         public object? CurrentValue { get; set; }
