@@ -1,0 +1,11 @@
+{
+  "name": "Siemens Client",
+  "description": "Siemens Client",
+  "version": "1.0.0.0",
+  "assemblies": [
+	"Newtonsoft.Json.dll",
+	"S7.Net.dll",
+    	"vNode.SiemensS7.dll"
+  ],
+  "Type": "SiemensClient"
+}
