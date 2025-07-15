@@ -27,22 +27,5 @@
       <HintPath>..\..\Common_Dependencies\vNode.Sdk.dll</HintPath>
     </Reference>
   </ItemGroup>
-	
-	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-			
-			<PropertyGroup>
-				<SourcePath>$(TargetPath)</SourcePath>
-				<DestDir1>$(SolutionDir)Package\SiemensModule</DestDir1>
-			    <PackageManager>$(SolutionDir)Package\PackageManager\PackageManager</PackageManager>			
-			
-			</PropertyGroup>
-
-			<MakeDir Directories="$(DestDir1)" />
-
-			<Copy SourceFiles="$(SourcePath)" DestinationFolder="$(DestDir1)" />
-
-			<Exec Command="$(PackageManager) $(DestDir1) password $(DestDir1)" />
-
-	</Target>
 
 </Project>
