@@ -34,8 +34,16 @@ Encargado de leer y escribir en el PLC:
 ### Scheduler
 Planifica las lecturas periódicas según el `PollRate`:
 
-- **SiemensScheduler**: Agrupa los tags por tasa de sondeo y dispara el evento `ReadingDue`.
+- **SiemensScheduler**: Agrupa los tags por tasa de sondeo y tipo de dato, y dispara el evento `ReadingDue`.
 - **TagReadBatchItem**: Representa cada solicitud programada (dirección, tamaño, tiempo previsto de lectura).
+
+#### 🟢 **Agrupamiento y envío de tramas**
+El envío de tramas se realiza agrupando los tags que están listos para ser leídos en **lotes** (batches) según los siguientes criterios:
+- **ScanRate (PollRate)**: Todos los tags con la misma frecuencia de lectura se agrupan juntos.
+- **DataType**: Los tags se agrupan por tipo de dato (por ejemplo, todos los `Int` juntos).
+- **Tamaño máximo de trama**: Cada lote se limita a un tamaño máximo de **200 bytes**. Si al añadir un tag el lote supera este límite y ya contiene al menos un tag, se inicia un nuevo lote.
+
+Este mecanismo garantiza que las lecturas sean eficientes, agrupando los datos de forma óptima para minimizar el número de operaciones y evitar sobrecargar el PLC.
 
 ### SiemensCommonLayer
 Abstrae la comunicación TCP con el PLC:
@@ -84,7 +92,7 @@ Para utilizarlo:
 
 ## ✅ Estado actual
 
-Todas las clases principales están implementadas y el proyecto **compila sin errores** en .NET 8, ofreciendo funciones completas de **lectura/escritura** y **diagnóstico**.  
+Todas las clases principales están implementadas y el proyecto **compila sin errores** en .NET 8, ofreciendo funciones completas de **lectura/escritura**, **diagnóstico** y **agrupamiento eficiente de datos**.  
 Incluye pruebas unitarias para los componentes clave.
 
 ---
@@ -95,3 +103,10 @@ Incluye pruebas unitarias para los componentes clave.
 - **Mejoras en la gestión de errores y diagnósticos**.
 - **Documentación ampliada y en inglés** con ejemplos de uso avanzado.
 - **Soporte para nuevas versiones de PLC Siemens y ampliación de tipos de tags**.
+
+---
+
+## 📦 JSON de configuración de canal Siemens S7
+
+El frontend debe enviar un JSON con la configuración del canal y los tags.  
+Ejemplo:
