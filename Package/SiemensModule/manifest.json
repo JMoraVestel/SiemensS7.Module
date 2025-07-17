@@ -7,5 +7,5 @@
 	"S7.Net.dll",
     	"vNode.SiemensS7.dll"
   ],
-  "Type": "SiemensClient"
+  "type": "SiemensClient"
 }

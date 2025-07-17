@@ -113,7 +113,7 @@ namespace vNode.SiemensS7.Scheduler
             ResetAllReadTimes();
 
             _running = true;
-            using var periodicTimer = new PeriodicTimer(TimeSpan.FromMilliseconds(10)); // Intervalo de comprobación.
+            using var periodicTimer = new PeriodicTimer(TimeSpan.FromMilliseconds(1)); // Intervalo de comprobación.
 
             while (_running && !cancellationToken.IsCancellationRequested)
             {
@@ -166,6 +166,57 @@ namespace vNode.SiemensS7.Scheduler
         }
 
         /// <summary>
+        /// Agrupa los tags listos para leer en lotes por DataType y PollRate, respetando un tamaño máximo de lote.
+        /// </summary>
+        public List<SiemensTagBatch> CreateDueTagBatches()
+        {
+            var batches = new List<SiemensTagBatch>();
+            var now = DateTime.UtcNow;
+
+            lock (_lock)
+            {
+                // Agrupa los tags por DataType y PollRate
+                var grouped = _scheduleItemsByPollRate
+                    .SelectMany(kv => kv.Value.Values)
+                    .Where(item => now >= item.NextReadTime)
+                    .GroupBy(item => new { item.Tag.Config.DataType, item.Tag.Config.PollRate });
+
+                foreach (var group in grouped)
+                {
+                    var tags = group.OrderBy(t => t.Tag.Config.Address).ToList();
+                    int batchStart = 0;
+
+                    while (batchStart < tags.Count)
+                    {
+                        int batchSize = 0;
+                        var batchTags = new List<SiemensTagConfig>();
+
+                        for (int i = batchStart; i < tags.Count; i++)
+                        {
+                            int tagSize = tags[i].Tag.Config.GetSize();
+                            if (batchSize + tagSize > 200 && batchTags.Count > 0)
+                                break;
+
+                            batchTags.Add(tags[i].Tag.Config);
+                            batchSize += tagSize;
+                        }
+
+                        batches.Add(new SiemensTagBatch
+                        {
+                            DataType = group.Key.DataType,
+                            PollRate = group.Key.PollRate,
+                            Tags = batchTags
+                        });
+
+                        batchStart += batchTags.Count;
+                    }
+                }
+            }
+
+            return batches;
+        }
+
+        /// <summary>
         /// Reinicia los tiempos de lectura de todos los tags al iniciar el planificador.
         /// </summary>
         private void ResetAllReadTimes()
@@ -209,5 +260,15 @@ namespace vNode.SiemensS7.Scheduler
         {
             NextReadTime = DateTime.UtcNow.AddMilliseconds(Tag.Config.PollRate);
         }
+    }
+
+    /// <summary>
+    /// Representa un lote de tags agrupados por tipo de dato y tasa de sondeo.
+    /// </summary>
+    public class SiemensTagBatch
+    {
+        public SiemensTagDataType DataType { get; set; }
+        public int PollRate { get; set; }
+        public List<SiemensTagConfig> Tags { get; set; } = new();
     }
 }

@@ -82,4 +82,39 @@ namespace vNode.SiemensS7.TagConfig
             return s7Addr;
         }
     }
+
+    /// <summary>
+    /// Configuración de un dispositivo Siemens.
+    /// </summary>
+    public class SiemensDeviceConfig
+    {
+        public string NodeName { get; set; }
+        public string IpAddress { get; set; }
+        public string CpuType { get; set; }
+        public int Rack { get; set; }
+        public int Slot { get; set; }
+        public int PollingIntervalMs { get; set; }
+        public Device Devices { get; set; }
+        public Tag[] Tags { get; set; }
+
+        public class Device
+        {
+            public string DeviceId { get; set; }
+            public string Description { get; set; }
+        }
+
+        public class Tag
+        {
+            public string TagId { get; set; }
+            public string Name { get; set; }
+            public string Address { get; set; }
+            public string DataType { get; set; }
+            public int PollRate { get; set; }
+            public int? BitNumber { get; set; }
+            public int StringSize { get; set; }
+            public int ArraySize { get; set; }
+            public bool IsReadOnly { get; set; }
+            public string DeviceId { get; set; }
+        }
+    }
 }

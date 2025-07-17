@@ -112,7 +112,7 @@ namespace SiemensModule
 
             // Inicializa el planificador de lecturas
             _scheduler = new SiemensScheduler(_logger);
-            _scheduler.ReadingDue += handleReadingDue;
+            _scheduler.ReadingDue += HandleReadingDue;
 
             // Inicializa los diagnósticos del canal
             _channelControl = new ChannelDiagnostics(new Dictionary<string, SiemensChannelConfig> { { "plc", _config } }, _logger);
@@ -147,7 +147,7 @@ namespace SiemensModule
 
                 _logger.Information("Siemens", "Start: Iniciando el canal Siemens...");
                 SetChannelEnabledState(true);
-                sendInitialData();
+                SendInitialData();
 
                 _cts = new CancellationTokenSource();
                 _readingTask = Task.Run(() => _scheduler.StartReadingAsync(_cts.Token));
@@ -199,7 +199,8 @@ namespace SiemensModule
                 }
 
                 // Envía una calidad de "fuera de servicio" para todos los tags.
-                sendChannelOrDeviceDisabledData();
+                SendChannelOrDeviceDisabledData();
+                
 
                 // Actualiza el estado del canal.
                 SetChannelEnabledState(false);
@@ -242,7 +243,7 @@ namespace SiemensModule
 
                 if (_started)
                 {
-                    sendInitialData(tagObject.IdTag);
+                    SendInitialData(tagObject.IdTag);
                 }
 
                 _logger.Information("Siemens", $"Tag '{tagObject.Name}' (ID: {tagObject.IdTag}) registrado exitosamente.");
@@ -359,7 +360,7 @@ namespace SiemensModule
             _channelControl?.Dispose();
             if (_scheduler != null)
             {
-                _scheduler.ReadingDue -= handleReadingDue;
+                _scheduler.ReadingDue -= HandleReadingDue;
             }
             _siemensControl.UnregisterChannel(this);
             GC.SuppressFinalize(this);
@@ -372,7 +373,7 @@ namespace SiemensModule
         /// <summary>
         /// Manejador para el evento de lectura programada del planificador.
         /// </summary>
-        private void handleReadingDue(object? sender, ReadingDueEventArgs e)
+        private void HandleReadingDue(object? sender, ReadingDueEventArgs e)
         {
             if (!_started) return;
 
@@ -386,7 +387,7 @@ namespace SiemensModule
                 if (tagsToReadWrappers.Any())
                 {
                     var results = _siemensTagReader.ReadManyForSdk(tagsToReadWrappers);
-                    processReadResult(results);
+                    ProcessReadResult(results);
                 }
             }
             catch (Exception ex)
@@ -398,7 +399,7 @@ namespace SiemensModule
         /// <summary>
         /// Procesa los resultados de una operación de lectura y publica los nuevos valores.
         /// </summary>
-        private void processReadResult(Dictionary<Guid, vNode.SiemensS7.TagReader.TagReadResult> results)
+        private void ProcessReadResult(Dictionary<Guid, vNode.SiemensS7.TagReader.TagReadResult> results)
         {
             if (!_started) return;
 
@@ -422,7 +423,7 @@ namespace SiemensModule
         /// <summary>
         /// Envía los datos iniciales de los tags cuando el canal se inicia o un tag se registra.
         /// </summary>
-        private void sendInitialData(Guid? tagId = null)
+        private void SendInitialData(Guid? tagId = null)
         {
             long timeStamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             var tagsToProcess = tagId.HasValue
@@ -438,11 +439,12 @@ namespace SiemensModule
                 PostNewEvent(tag.CurrentValue, quality, tag.Config.TagId, timeStamp);
             }
         }
+       
 
         /// <summary>
         /// Envía una calidad de "fuera de servicio" para los tags cuando el canal se detiene.
         /// </summary>
-        private void sendChannelOrDeviceDisabledData(string? deviceId = null)
+        private void SendChannelOrDeviceDisabledData(string? deviceId = null)
         {
             long timeStamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             foreach (var tag in _tags.Values)
