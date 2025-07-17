@@ -3,7 +3,7 @@ using vNode.SiemensS7.ChannelConfig;
 using Xunit;
 
 namespace vNode.SiemensS7.Tests.ChannelConfig
-{
+{   
     public class SiemensChannelConfigTests
     {   
         /// <summary>
@@ -33,6 +33,18 @@ namespace vNode.SiemensS7.Tests.ChannelConfig
                         ""arraySize"": 0,
                         ""isReadOnly"": false,
                         ""deviceId"": ""plc""
+                    },
+                    {
+                        ""tagId"": ""f1a2b3c4-d5e6-7890-1234-567890abcdef"",
+                        ""name"": ""Presion"",
+                        ""address"": ""DB1.DBW22"",
+                        ""dataType"": ""Real"",
+                        ""pollRate"": 500,
+                        ""bitNumber"": null,
+                        ""stringSize"": 0,
+                        ""arraySize"": 0,
+                        ""isReadOnly"": false,
+                        ""deviceId"": ""plc""
                     }
                 ]
             }";
@@ -51,9 +63,11 @@ namespace vNode.SiemensS7.Tests.ChannelConfig
             Assert.Equal(0, config.Rack);
             Assert.Equal(2, config.Slot);
             Assert.Equal(1000, config.PollingIntervalMs);
-            Assert.Single(config.Tags);
+            Assert.Equal(2, config.Tags.Count);
             Assert.Equal("Temperatura", config.Tags[0].Name);
             Assert.Equal("DB1.DBW20", config.Tags[0].Address);
+            Assert.Equal("Presion", config.Tags[1].Name);
+            Assert.Equal("DB1.DBW22", config.Tags[1].Address);
         }
     }
 }
