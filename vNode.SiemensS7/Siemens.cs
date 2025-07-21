@@ -315,6 +315,23 @@ namespace SiemensModule
             }
         }
 
+        /// <summary>
+        /// Escribe un lote de valores en los tags especificados.
+        /// </summary>
+        public async Task<bool> WriteTagsBatchAsync(IEnumerable<(Guid TagId, object Value)> tagValuePairs)
+        {
+            var batch = new List<(SiemensTagWrapper, object)>();
+            foreach (var (tagId, value) in tagValuePairs)
+            {
+                if (_tags.TryGetValue(tagId, out var wrapper) && !wrapper.Config.IsReadOnly)
+                {
+                    batch.Add((wrapper, value));
+                }
+            }
+            if (batch.Count == 0) return false;
+            return await _siemensTagReader.WriteTagsBatchAsync(batch);
+        }
+
         public override void Dispose()
         {
             _logger.Information("Siemens", "Dispose: Solicitud de liberación del canal.");

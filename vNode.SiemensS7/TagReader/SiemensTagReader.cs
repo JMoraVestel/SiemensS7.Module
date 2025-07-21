@@ -259,5 +259,67 @@ namespace vNode.SiemensS7.TagReader
 
             return true;
         }
+
+        /// <summary>
+        /// Escribe varios tags en el PLC agrupando por lotes de hasta 200 bytes.
+        /// </summary>
+        /// <param name="tagValuePairs">Colección de pares (Tag, Valor) a escribir.</param>
+        /// <returns>True si todas las escrituras fueron exitosas.</returns>
+        public async Task<bool> WriteTagsBatchAsync(IEnumerable<(SiemensTagWrapper Tag, object Value)> tagValuePairs)
+        {
+            // Ordena por dirección para maximizar la agrupación contigua
+            var ordered = tagValuePairs.OrderBy(x => x.Tag.Config.Address).ToList();
+            var currentBatch = new List<(SiemensTagWrapper, object)>();
+            int currentBatchSize = 0;
+            bool allOk = true;
+
+            foreach (var pair in ordered)
+            {
+                int tagSize = pair.Tag.Config.GetSize();
+                if (currentBatchSize + tagSize > 200 && currentBatch.Count > 0)
+                {
+                    // Envía el lote actual
+                    bool ok = await WriteBatchInternalAsync(currentBatch);
+                    allOk &= ok;
+                    currentBatch.Clear();
+                    currentBatchSize = 0;
+                }
+                currentBatch.Add(pair);
+                currentBatchSize += tagSize;
+            }
+
+            if (currentBatch.Count > 0)
+            {
+                bool ok = await WriteBatchInternalAsync(currentBatch);
+                allOk &= ok;
+            }
+
+            return allOk;
+        }
+
+        /// <summary>
+        /// Serializa y escribe un lote de tags en el PLC.
+        /// </summary>
+        private async Task<bool> WriteBatchInternalAsync(List<(SiemensTagWrapper Tag, object Value)> batch)
+        {
+            try
+            {
+                // Simula la escritura múltiple: en la práctica, aquí deberías usar WriteMultipleVars si tu driver lo soporta.
+                await Task.Run(() =>
+                {
+                    foreach (var (tag, value) in batch)
+                    {
+                        var valueToWrite = SiemensDataConverter.ConvertToPlc(tag.Config, value);
+                        _connection.Write(tag.Config.Address, valueToWrite);
+                    }
+                });
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "SiemensTagReader", "Error al escribir lote de tags.");
+                return false;
+            }
+        }
     }
 }
