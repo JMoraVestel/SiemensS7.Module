@@ -21,15 +21,15 @@ Gestiona la configuración de canales y dispositivos Siemens:
 Define y valida cada tag y su dirección dentro del PLC:
 
 - **SiemensTagConfig**: Dirección, tipo de dato, tamaño, `PollRate`, etc.
-- **SiemensTagWrapper**: Encapsula la configuración junto al modelo de tag.
-- **S7Address**: Parseo y validación de direcciones tipo `DB1.DBW20`.
+- **SiemensTagWrapper**: Encapsula la configuración junto al modelo de tag y realiza validaciones.
+- **S7Address**: Parseo y validación de direcciones tipo `DB1.DBW20` y obtención de parámetros para lectura/escritura.
 
 ### TagReader
 Encargado de leer y escribir en el PLC:
 
 - **SiemensTagReader**: Lecturas individuales o en lote, conversión de valores y control de resultados.
-- **SiemensDataConverter**: Transformación de datos entre tipos PLC y .NET.
-- **TagReadResult/TagReadResultItem**: Representan los resultados de lectura.
+- **SiemensDataConverter**: Transformación de datos entre tipos PLC y .NET, tanto para lectura como para escritura.
+- **TagReadResult/TagReadResultItem**: Representan los resultados de lectura, incluyendo éxito o error.
 
 ### Scheduler
 Planifica las lecturas periódicas según el `PollRate`:
@@ -67,15 +67,30 @@ Registra estadísticas de lectura y escritura:
 
 ---
 
-## 🚀 Uso básico
+## 🚀 Flujo de trabajo y funcionamiento
 
-El canal principal está implementado en `Siemens.cs`.  
-Para utilizarlo:
+1. **Carga y validación de configuración**  
+   - El canal y los tags se configuran mediante JSON y se deserializan en objetos de configuración.
+   - Se valida la configuración de cada tag (tipo, dirección, rango de bit, etc.) usando `SiemensTagWrapper` y `S7Address`.
 
-1. Configura el canal con un JSON siguiendo el modelo de `SiemensChannelConfig`.
-2. Registra los tags con `RegisterTag`.
-3. Inicia el canal con `Start` para que el planificador comience a leer según el `PollRate`.
-4. Escribe valores en el PLC usando `SetTagValue`.
+2. **Lectura de tags**  
+   - Se agrupan los tags por `PollRate` y tipo de dato.
+   - Se leen en lotes de hasta 200 bytes usando `SiemensTagReader`.
+   - Los datos crudos (`byte[]`) se convierten a tipos .NET mediante `SiemensDataConverter`.
+
+3. **Escritura de tags**  
+   - Los valores .NET se convierten al formato PLC antes de escribir.
+   - Se soporta escritura individual y por lotes, respetando el tamaño máximo de trama.
+
+4. **Conversión de datos**  
+   - `SiemensDataConverter` transforma los datos entre los tipos PLC y .NET, manejando correctamente booleanos, enteros, reales, strings, etc.
+
+5. **Diagnóstico y logging**  
+   - Se registran estadísticas de operaciones, errores y cambios de estado para diagnóstico y trazabilidad.
+
+6. **Serialización y deserialización**  
+   - Se utilizan `System.Text.Json` y `Newtonsoft.Json` para la gestión de configuraciones y datos.
+   - Existen tests unitarios que validan la correcta deserialización de canales y tags desde JSON.
 
 ---
 
@@ -93,7 +108,53 @@ Para utilizarlo:
 ## ✅ Estado actual
 
 Todas las clases principales están implementadas y el proyecto **compila sin errores** en .NET 8, ofreciendo funciones completas de **lectura/escritura**, **diagnóstico** y **agrupamiento eficiente de datos**.  
-Incluye pruebas unitarias para los componentes clave.
+Incluye pruebas unitarias para los componentes clave, incluyendo la conversión de datos y la deserialización de configuraciones.
+
+---
+
+## 📦 Ejemplo de JSON de configuración de canal Siemens S7
+
+El frontend debe enviar un JSON con la configuración del canal y los tags.
+
+### Canal
+
+{
+  "nodeName": "ChannelProduction1",
+  "ipAddress": "192.168.1.100",
+  "cpuType": "S7300",
+  "rack": 0,
+  "slot": 2,
+  "pollingIntervalMs": 1000
+}
+
+### Tags
+
+[
+  {
+    "tagId": "a1b2c3d4-e5f6-7890-1234-56789abcdef0",
+    "name": "Started",
+    "address": "DB101.DBX0.0",
+    "dataType": "Bool",
+    "pollRate": 500,
+    "bitNumber": 0,
+    "stringSize": 0,
+    "arraySize": 0,
+    "isReadOnly": false,
+    "deviceId": "plc1"
+  },
+  {
+    "tagId": "b2c3d4e5-f6a1-8901-2345-6789abcdef01",
+    "name": "Pressure",
+    "address": "DB101.DBW2",
+    "dataType": "Word",
+    "pollRate": 1000,
+    "bitNumber": 1,
+    "stringSize": 0,
+    "arraySize": 0,
+    "isReadOnly": false,
+    "deviceId": "plc1"
+  }
+]
 
 ---
 
@@ -105,8 +166,3 @@ Incluye pruebas unitarias para los componentes clave.
 - **Soporte para nuevas versiones de PLC Siemens y ampliación de tipos de tags**.
 
 ---
-
-## 📦 JSON de configuración de canal Siemens S7
-
-El frontend debe enviar un JSON con la configuración del canal y los tags.  
-Ejemplo:
