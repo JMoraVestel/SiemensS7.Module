@@ -1,215 +1,153 @@
-﻿using System;
+﻿using SiemensModule;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using vNode.Sdk.Logger;
+using vNode.SiemensS7.ChannelConfig;
 using vNode.SiemensS7.TagConfig;
 
 namespace vNode.SiemensS7.Scheduler
 {
     /// <summary>
-    /// Argumentos del evento que se dispara cuando un grupo de tags debe ser leído.
+    /// Argumentos del evento que se dispara cuando un lote de tags Siemens debe ser leído.
     /// </summary>
-    public class ReadingDueEventArgs : EventArgs
+    public class SiemensReadingDueEventArgs : EventArgs
     {
-        /// <summary>
-        /// Diccionario de tags que deben ser leídos, con su ID como clave y su configuración como valor.
-        /// </summary>
-        public Dictionary<Guid, SiemensTagConfig> TagsToRead { get; }
-
-        public ReadingDueEventArgs(Dictionary<Guid, SiemensTagConfig> tagsToRead)
+        public SiemensTagBatch Batch { get; }
+        public SiemensReadingDueEventArgs(SiemensTagBatch batch)
         {
-            TagsToRead = tagsToRead;
+            Batch = batch;
         }
     }
 
     /// <summary>
-    /// Planificador encargado de gestionar y disparar las lecturas periódicas de tags para un PLC Siemens.
+    /// Orquestador principal para la planificación y operaciones de lectura de tags Siemens S7.
     /// </summary>
     public class SiemensScheduler
     {
         private readonly object _lock = new();
         private readonly ISdkLogger _logger;
-        private readonly Dictionary<int, Dictionary<Guid, SiemensTagScheduleItem>> _scheduleItemsByPollRate = new();
+        private readonly TickScheduler _tickScheduler;
+        private readonly HashSet<string> _deviceIds;
         private bool _running = false;
 
-        /// <summary>
-        /// Evento que se dispara cuando uno o más tags están listos para ser leídos.
-        /// </summary>
-        public event EventHandler<ReadingDueEventArgs>? ReadingDue;
+        public event EventHandler<SiemensReadingDueEventArgs>? ReadingDue;
 
-        public SiemensScheduler(ISdkLogger logger)
+        /// <summary>
+        /// Inicializa el planificador Siemens con la configuración de dispositivos y parámetros de temporización.
+        /// </summary>
+        /// <param name="devices">Lista de dispositivos Siemens a planificar</param>
+        /// <param name="logger">Logger para eventos específicos de Siemens</param>
+        /// <param name="baseTickMs">Intervalo base de tick para la precisión de temporización (por defecto: 100ms)</param>
+        public SiemensScheduler(List<ChannelConfig.SiemensDeviceConfig> devices, ISdkLogger logger, int baseTickMs = 100)
         {
             _logger = logger;
+            _tickScheduler = new TickScheduler(logger, baseTickMs);
+            _deviceIds = devices.Select(d => d.DeviceId).ToHashSet();
         }
 
-        /// <summary>
-        /// Indica si el planificador está en ejecución.
-        /// </summary>
         public bool Running => _running;
 
-        /// <summary>
-        /// Detiene el ciclo de lectura del planificador.
-        /// </summary>
         public void StopReading()
         {
-            _logger.Information("SiemensScheduler", "Deteniendo el planificador de lecturas.");
             _running = false;
         }
 
         /// <summary>
-        /// Añade un tag al planificador para su sondeo periódico.
+        /// Añade un tag Siemens al planificador.
         /// </summary>
-        /// <param name="tag">El wrapper del tag a añadir.</param>
+        /// <param name="tag">Tag Siemens a planificar para lectura periódica</param>
         public void AddTag(SiemensTagWrapper tag)
         {
-            if (tag.Config.PollRate <= 0)
+            lock (_lock)
             {
-                // Los tags sin una tasa de sondeo positiva no se planifican para lectura periódica.
-                return;
+                _tickScheduler.AddTag(tag);
+                Monitor.Pulse(_lock);
             }
+        }
+
+        /// <summary>
+        /// Añade múltiples tags Siemens al planificador en una sola operación.
+        /// </summary>
+        /// <param name="tags">Colección de tags Siemens a planificar</param>
+        public void AddTagsBatch(IList<SiemensTagWrapper> tags)
+        {
+            if (tags == null || tags.Count == 0) return;
 
             lock (_lock)
             {
-                int pollRate = tag.Config.PollRate;
-                if (!_scheduleItemsByPollRate.ContainsKey(pollRate))
-                {
-                    _scheduleItemsByPollRate[pollRate] = new Dictionary<Guid, SiemensTagScheduleItem>();
-                }
-
-                var scheduleItem = new SiemensTagScheduleItem(tag);
-                _scheduleItemsByPollRate[pollRate][tag.Config.TagId] = scheduleItem;
-                _logger.Debug("SiemensScheduler", $"Tag {tag.Config.TagId} añadido al planificador con una tasa de sondeo de {pollRate}ms.");
+                _tickScheduler.AddTagsBatch(tags);
+                Monitor.Pulse(_lock);
             }
         }
 
         /// <summary>
         /// Elimina un tag del planificador.
         /// </summary>
-        /// <param name="tagId">El ID del tag a eliminar.</param>
+        /// <param name="tagId">ID del tag a eliminar</param>
         public void RemoveTag(Guid tagId)
         {
-            lock (_lock)
-            {
-                foreach (var pollGroup in _scheduleItemsByPollRate.Values)
-                {
-                    if (pollGroup.Remove(tagId))
-                    {
-                        _logger.Debug("SiemensScheduler", $"Tag {tagId} eliminado del planificador.");
-                        return; // Tag encontrado y eliminado.
-                    }
-                }
-            }
+            _tickScheduler.RemoveTag(tagId);
         }
 
         /// <summary>
-        /// Inicia el ciclo de lectura asíncrono del planificador.
+        /// Elimina múltiples tags del planificador en una sola operación.
         /// </summary>
-        /// <param name="cancellationToken">Token para solicitar la cancelación del ciclo.</param>
-        public async Task StartReadingAsync(CancellationToken cancellationToken)
+        /// <param name="tagIds">Colección de IDs de tags a eliminar</param>
+        public void RemoveTags(IList<Guid> tagIds)
         {
-            _logger.Information("SiemensScheduler", "Iniciando el planificador de lecturas.");
-            ResetAllReadTimes();
+            ArgumentNullException.ThrowIfNull(tagIds);
 
-            _running = true;
-            using var periodicTimer = new PeriodicTimer(TimeSpan.FromMilliseconds(1)); // Intervalo de comprobación.
+            if (tagIds.Count == 0) return;
 
-            while (_running && !cancellationToken.IsCancellationRequested)
-            {
-                try
-                {
-                    await periodicTimer.WaitForNextTickAsync(cancellationToken);
-
-                    var dueTags = GetDueTags();
-
-                    if (dueTags.Any())
-                    {
-                        ReadingDue?.Invoke(this, new ReadingDueEventArgs(dueTags));
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    _running = false;
-                    _logger.Information("SiemensScheduler", "La operación de lectura del planificador fue cancelada.");
-                }
-                catch (Exception ex)
-                {
-                    _running = false;
-                    _logger.Fatal(ex, "SiemensScheduler", "Error no manejado en el bucle del planificador.");
-                }
-            }
-            _logger.Information("SiemensScheduler", "El planificador de lecturas se ha detenido.");
+            _logger.Debug("SiemensScheduler", $"Eliminando {tagIds.Count} tags del planificador");
+            _tickScheduler.RemoveTags(tagIds);
         }
 
         /// <summary>
-        /// Obtiene un diccionario con los tags cuya lectura está pendiente.
+        /// Convierte los tags pendientes en lotes optimizados para la comunicación Siemens.
+        /// Agrupa por DeviceId, DataType y ScanRate, y respeta el límite de 200 bytes por lote.
         /// </summary>
-        /// <returns>Un diccionario de tags listos para ser leídos.</returns>
-        private Dictionary<Guid, SiemensTagConfig> GetDueTags()
-        {
-            var dueTags = new Dictionary<Guid, SiemensTagConfig>();
-            var now = DateTime.UtcNow;
-
-            lock (_lock)
-            {
-                foreach (var item in _scheduleItemsByPollRate.Values.SelectMany(group => group.Values))
-                {
-                    if (now >= item.NextReadTime)
-                    {
-                        dueTags.Add(item.Tag.Config.TagId, item.Tag.Config);
-                        item.UpdateNextReadTime(); // Reprograma la siguiente lectura.
-                    }
-                }
-            }
-            return dueTags;
-        }
-
-        /// <summary>
-        /// Agrupa los tags listos para leer en lotes por DataType y PollRate, respetando un tamaño máximo de lote.
-        /// </summary>
-        public List<SiemensTagBatch> CreateDueTagBatches()
+        private List<SiemensTagBatch> CreateBatchesFromDueTags(List<SiemensTagWrapper> dueTags)
         {
             var batches = new List<SiemensTagBatch>();
-            var now = DateTime.UtcNow;
 
-            lock (_lock)
+            // Agrupa por DeviceId, DataType y PollRate
+            var grouped = dueTags
+                .GroupBy(t => new { t.Config.DeviceId, t.Config.DataType, t.Config.PollRate });
+
+            foreach (var group in grouped)
             {
-                // Agrupa los tags por DataType y PollRate
-                var grouped = _scheduleItemsByPollRate
-                    .SelectMany(kv => kv.Value.Values)
-                    .Where(item => now >= item.NextReadTime)
-                    .GroupBy(item => new { item.Tag.Config.DataType, item.Tag.Config.PollRate });
+                var tags = group.OrderBy(t => t.Config.Address).ToList();
+                int batchStart = 0;
 
-                foreach (var group in grouped)
+                while (batchStart < tags.Count)
                 {
-                    var tags = group.OrderBy(t => t.Tag.Config.Address).ToList();
-                    int batchStart = 0;
+                    int batchSize = 0;
+                    var batchTags = new List<SiemensTagConfig>();
 
-                    while (batchStart < tags.Count)
+                    for (int i = batchStart; i < tags.Count; i++)
                     {
-                        int batchSize = 0;
-                        var batchTags = new List<SiemensTagConfig>();
+                        int tagSize = tags[i].Config.GetSize();
+                        if (batchSize + tagSize > 200 && batchTags.Count > 0)
+                            break;
 
-                        for (int i = batchStart; i < tags.Count; i++)
-                        {
-                            int tagSize = tags[i].Tag.Config.GetSize();
-                            if (batchSize + tagSize > 200 && batchTags.Count > 0)
-                                break;
-
-                            batchTags.Add(tags[i].Tag.Config);
-                            batchSize += tagSize;
-                        }
-
-                        batches.Add(new SiemensTagBatch
-                        {
-                            DataType = group.Key.DataType,
-                            PollRate = group.Key.PollRate,
-                            Tags = batchTags
-                        });
-
-                        batchStart += batchTags.Count;
+                        batchTags.Add(tags[i].Config);
+                        batchSize += tagSize;
                     }
+
+                    batches.Add(new SiemensTagBatch
+                    {
+                        DataType = group.Key.DataType,
+                        PollRate = group.Key.PollRate,
+                        DeviceId = group.Key.DeviceId,
+                        Tags = batchTags
+                    });
+
+                    batchStart += batchTags.Count;
                 }
             }
 
@@ -217,58 +155,175 @@ namespace vNode.SiemensS7.Scheduler
         }
 
         /// <summary>
-        /// Reinicia los tiempos de lectura de todos los tags al iniciar el planificador.
+        /// Bucle principal de planificación que coordina la temporización y el procesamiento específico de Siemens.
         /// </summary>
-        private void ResetAllReadTimes()
+        /// <param name="cancellationToken">Token de cancelación para detener el bucle</param>
+        public async Task StartReadingAsync(CancellationToken cancellationToken)
         {
-            lock (_lock)
+            _tickScheduler.Reset();
+            _running = true;
+
+            using var periodicTimer = new PeriodicTimer(TimeSpan.FromMilliseconds(_tickScheduler.BaseTickMs));
+
+            while (_running && !cancellationToken.IsCancellationRequested)
             {
-                foreach (var item in _scheduleItemsByPollRate.Values.SelectMany(group => group.Values))
+                try
                 {
-                    item.ResetReadTime();
+                    await periodicTimer.WaitForNextTickAsync(cancellationToken);
+
+                    _tickScheduler.Tick();
+                    var dueTags = _tickScheduler.GetDueTags();
+
+                    if (dueTags.Count == 0)
+                        continue;
+
+                    var readBatches = CreateBatchesFromDueTags(dueTags);
+
+                    foreach (var batchItem in readBatches)
+                    {
+                        OnReadingDue(batchItem);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Fatal(ex, "SiemensScheduler", "Error no manejado en el bucle del planificador");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Obtiene estadísticas de planificación delegando en TickScheduler.
+        /// </summary>
+        public Dictionary<int, IntervalInfo> GetScheduleStats()
+        {
+            return _tickScheduler.GetScheduleStats();
+        }
+
+        /// <summary>
+        /// Registra estadísticas detalladas de planificación.
+        /// </summary>
+        public void LogScheduleStats()
+        {
+            _tickScheduler.LogScheduleStats();
+        }
+
+        /// <summary>
+        /// Lanza el evento ReadingDue para notificar que un lote está listo para la comunicación Siemens.
+        /// </summary>
+        private void OnReadingDue(SiemensTagBatch readBatch)
+        {
+            ReadingDue?.Invoke(this, new SiemensReadingDueEventArgs(readBatch));
+        }
+    }
+
+    /// <summary>
+    /// Lote de tags Siemens agrupados para lectura eficiente.
+    /// </summary>
+    public class SiemensTagBatch
+    {
+        public SiemensTagDataType DataType { get; set; }
+        public int PollRate { get; set; }
+        public string DeviceId { get; set; }
+        public List<SiemensTagConfig> Tags { get; set; } = new();
+    }
+
+    /// <summary>
+    /// Configuración del canal de producción.
+    /// </summary>
+    public class ChannelProductionConfig
+    {
+        public string NodeName { get; set; } = "ChannelProduction1";
+        public string IpAddress { get; set; } = "192.168.1.100";
+        public string CpuType { get; set; } = "S7300";
+        public int Rack { get; set; } = 0;
+        public int Slot { get; set; } = 2;
+        public int PollingIntervalMs { get; set; } = 1000;
+    }
+
+    /// <summary>
+    /// Configuración de los tags iniciales.
+    /// </summary>
+    public static class InitialTagConfig
+    {
+        public static List<SiemensTagConfig> Tags { get; } = new List<SiemensTagConfig>
+        {
+            new SiemensTagConfig
+            {
+                TagId = Guid.Parse("a1b2c3d4-e5f6-7890-1234-56789abcdef0"),
+                Name = "Started",
+                Address = "DB101.DBX0.0",
+                DataType = SiemensTagDataType.Bool,
+                PollRate = 500,
+                BitNumber = 0,
+                StringSize = 0,
+                ArraySize = 0,
+                IsReadOnly = false,
+                DeviceId = "plc1"
+            },
+            new SiemensTagConfig
+            {
+                TagId = Guid.Parse("b2c3d4e5-f6a1-8901-2345-6789abcdef01"),
+                Name = "Pressure",
+                Address = "DB101.DBW2",
+                DataType = SiemensTagDataType.Word,
+                PollRate = 1000,
+                BitNumber = null,
+                StringSize = 0,
+                ArraySize = 0,
+                IsReadOnly = false,
+                DeviceId = "plc1"
+            }
+        };
+    }
+
+    /// <summary>
+    /// Deserializa la configuración del canal Siemens desde un JSON.
+    /// </summary>
+    public static class SiemensChannelConfigDeserializer
+    {
+        /// <summary>
+        /// Deserializa un JSON en un objeto SiemensChannelConfig.
+        /// </summary>
+        /// <param name="channelJson">El JSON del canal.</param>
+        /// <returns>Un objeto SiemensChannelConfig.</returns>
+        public static SiemensChannelConfig Deserialize(string channelJson)
+        {
+            return JsonSerializer.Deserialize<SiemensChannelConfig>(channelJson);
+        }
+    }
+
+    /// <summary>
+    /// Método para inicializar el canal Siemens y registrar los tags.
+    /// </summary>
+    public static class SiemensChannelInitializer
+    {
+        public static void InitializeChannel(SiemensChannelConfig channelConfig, ISdkLogger logger, SiemensControl siemensControl, List<SiemensTagConfig>? tagsConfig)
+        {
+            var canal = new Siemens(channelConfig, logger, siemensControl);
+
+            if (tagsConfig != null)
+            {
+                foreach (var tagConfig in tagsConfig)
+                {
+                    canal.RegisterTag(tagConfig);
                 }
             }
         }
     }
 
     /// <summary>
-    /// Clase interna para almacenar la información de planificación de un tag individual.
+    /// Representa un canal Siemens.
     /// </summary>
-    internal class SiemensTagScheduleItem
+    public class Siemens
     {
-        public SiemensTagWrapper Tag { get; }
-        public DateTime NextReadTime { get; private set; }
-
-        public SiemensTagScheduleItem(SiemensTagWrapper tag)
+        public Siemens(SiemensChannelConfig config, ISdkLogger logger, SiemensControl siemensControl)
         {
-            Tag = tag;
-            ResetReadTime();
+            // Inicialización del canal
         }
 
-        /// <summary>
-        /// Actualiza la próxima hora de lectura basándose en la hora actual y la tasa de sondeo.
-        /// </summary>
-        public void UpdateNextReadTime()
+        public void RegisterTag(SiemensTagConfig tagConfig)
         {
-            NextReadTime = DateTime.UtcNow.AddMilliseconds(Tag.Config.PollRate);
+            // Lógica para crear el wrapper y añadirlo al scheduler y diagnóstico
         }
-
-        /// <summary>
-        /// Establece la hora de la próxima lectura al iniciar el planificador.
-        /// </summary>
-        public void ResetReadTime()
-        {
-            NextReadTime = DateTime.UtcNow.AddMilliseconds(Tag.Config.PollRate);
-        }
-    }
-
-    /// <summary>
-    /// Representa un lote de tags agrupados por tipo de dato y tasa de sondeo.
-    /// </summary>
-    public class SiemensTagBatch
-    {
-        public SiemensTagDataType DataType { get; set; }
-        public int PollRate { get; set; }
-        public List<SiemensTagConfig> Tags { get; set; } = new();
     }
 }

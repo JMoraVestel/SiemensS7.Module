@@ -34,9 +34,9 @@ namespace SiemensModule
         private readonly ISdkLogger _logger;
         private readonly string _nodeName;
 
-        // Reemplazo de las expresiones de colección para inicializar los diccionarios con constructores estándar.  
-        private readonly Dictionary<Guid, SiemensTagWrapper> _tags = new Dictionary<Guid, SiemensTagWrapper>();
-        private readonly Dictionary<Guid, SiemensControlTag> _controlTagsDictionary = new Dictionary<Guid, SiemensControlTag>();
+        // Diccionarios de tags y tags de control.
+        private readonly Dictionary<Guid, SiemensTagWrapper> _tags = new();
+        private readonly Dictionary<Guid, SiemensControlTag> _controlTagsDictionary = new();
 
         /// <summary>
         /// Obtiene el número de tags de datos registrados en el canal.
@@ -62,11 +62,6 @@ namespace SiemensModule
         /// <summary>
         /// Constructor para el canal Siemens.
         /// </summary>
-        /// <param name="idChannel">El identificador único para este canal.</param>
-        /// <param name="nodeName">Nombre del nodo vNode.</param>
-        /// <param name="configJson">Objeto JSON con la configuración del canal.</param>
-        /// <param name="logger">Instancia del logger para registrar eventos.</param>
-        /// <param name="siemensControl">Instancia de control para la gestión del módulo.</param>
         public Siemens(Guid idChannel, string nodeName, JsonObject configJson, ISdkLogger logger, SiemensControl siemensControl)
         {
             ArgumentNullException.ThrowIfNull(configJson);
@@ -74,9 +69,7 @@ namespace SiemensModule
             ArgumentNullException.ThrowIfNull(siemensControl);
 
             if (string.IsNullOrWhiteSpace(configJson.ToString()))
-            {
                 throw new ArgumentException("La configuración JSON no puede ser nula o vacía.", nameof(configJson));
-            }
 
             IdChannel = idChannel;
             _nodeName = nodeName;
@@ -90,7 +83,6 @@ namespace SiemensModule
         /// <summary>
         /// Inicializa o reinicializa el canal con una nueva configuración.
         /// </summary>
-        /// <param name="configJson">La configuración del canal en formato JSON.</param>
         private void initializeChannel(JsonObject configJson)
         {
             _logger.Information("Siemens",
@@ -106,12 +98,20 @@ namespace SiemensModule
                 throw new InvalidChannelConfigException(ex);
             }
 
+            // Validación robusta de dispositivos
+            var deviceList = _config.Devices?.Values.ToList();
+            if (deviceList == null || deviceList.Count == 0)
+            {
+                _logger.Error("Siemens", "initializeChannel-> No se encontraron dispositivos en la configuración del canal.");
+                throw new InvalidChannelConfigException(new Exception("No hay dispositivos configurados en el canal Siemens."));
+            }
+
             // Inicializa el lector de tags
             var plcConnection = new SiemensTcpStrategy(_config.IpAddress, _config.Rack, _config.Slot);
             _siemensTagReader = new SiemensTagReader(plcConnection, _config, _logger);
 
             // Inicializa el planificador de lecturas
-            _scheduler = new SiemensScheduler(_logger);
+            _scheduler = new SiemensScheduler(deviceList, _logger);
             _scheduler.ReadingDue += HandleReadingDue;
 
             // Inicializa los diagnósticos del canal
@@ -132,9 +132,6 @@ namespace SiemensModule
 
         #region Implementación de BaseChannel (métodos públicos)
 
-        /// <summary>
-        /// Inicia el canal, permitiendo la comunicación y el sondeo de tags.
-        /// </summary>
         public override bool Start()
         {
             lock (_channelLock)
@@ -158,9 +155,6 @@ namespace SiemensModule
             }
         }
 
-        /// <summary>
-        /// Detiene el canal, finalizando la comunicación y el sondeo de tags.
-        /// </summary>
         public override bool Stop()
         {
             lock (_channelLock)
@@ -173,16 +167,13 @@ namespace SiemensModule
 
                 _logger.Information("Siemens", "Stop: Deteniendo el canal Siemens...");
 
-                // Detiene el planificador para evitar nuevas lecturas.
                 _scheduler?.StopReading();
 
-                // Cancela las tareas en segundo plano.
                 if (_cts != null && !_cts.IsCancellationRequested)
                 {
                     _cts.Cancel();
                 }
 
-                // Espera a que la tarea de lectura finalice.
                 try
                 {
                     _readingTask?.Wait(TimeSpan.FromSeconds(5));
@@ -198,11 +189,8 @@ namespace SiemensModule
                     _cts = null;
                 }
 
-                // Envía una calidad de "fuera de servicio" para todos los tags.
                 SendChannelOrDeviceDisabledData();
-                
 
-                // Actualiza el estado del canal.
                 SetChannelEnabledState(false);
                 _started = false;
                 _logger.Information("Siemens", "Stop: El canal Siemens se ha detenido correctamente.");
@@ -210,11 +198,6 @@ namespace SiemensModule
             }
         }
 
-        /// <summary>
-        /// Registra un nuevo tag en el canal.
-        /// </summary>
-        /// <param name="tagObject">El objeto base del tag a registrar.</param>
-        /// <returns>True si el registro fue exitoso, de lo contrario false.</returns>
         public override bool RegisterTag(TagModelBase tagObject)
         {
             ArgumentNullException.ThrowIfNull(tagObject);
@@ -230,7 +213,7 @@ namespace SiemensModule
                 if (wrapper.Status == SiemensTagWrapper.SiemensTagStatusType.ConfigError)
                 {
                     _logger.Error("Siemens", $"No se pudo registrar el tag '{tagObject.Name}' debido a un error de configuración.");
-                    _tags[tagObject.IdTag] = wrapper; // Almacenar para reportar el error.
+                    _tags[tagObject.IdTag] = wrapper;
                     return false;
                 }
 
@@ -251,11 +234,6 @@ namespace SiemensModule
             }
         }
 
-        /// <summary>
-        /// Elimina un tag del canal.
-        /// </summary>
-        /// <param name="idTag">El ID del tag a eliminar.</param>
-        /// <returns>True si la eliminación fue exitosa, de lo contrario false.</returns>
         public override bool RemoveTag(Guid idTag)
         {
             lock (_lock)
@@ -277,25 +255,16 @@ namespace SiemensModule
             }
         }
 
-        /// <summary>
-        /// Escribe un valor en un tag.
-        /// </summary>
-        /// <param name="idTag">ID del tag a escribir.</param>
-        /// <param name="newValue">Nuevo valor para el tag.</param>
-        /// <returns>Un string indicando el resultado de la operación.</returns>
         public override async Task<string> SetTagValue(Guid idTag, object newValue)
         {
             _logger.Debug("Siemens", $"Iniciando escritura del valor '{newValue}' en el tag ID '{idTag}'.");
 
-            // Primero, verifica si es un tag de control.
             if (_controlTagsDictionary.TryGetValue(idTag, out var controlTag))
             {
-                // Asumimos que los tags de control no son de solo lectura, pero se podría añadir validación.
                 _logger.Warning("Siemens", $"La escritura en tags de control (ID: {idTag}) no está implementada.");
                 return "Error: La escritura en tags de control no está soportada actualmente.";
             }
 
-            // Si no es un tag de control, es un tag de datos.
             if (!_tags.TryGetValue(idTag, out var tagWrapper))
             {
                 _logger.Error("Siemens", $"No se pudo escribir en el tag. ID no encontrado: {idTag}.");
@@ -313,7 +282,6 @@ namespace SiemensModule
 
             try
             {
-                // Utiliza el SiemensTagReader para escribir en el PLC.
                 bool success = await _siemensTagReader.WriteTagAsync(tagWrapper, newValue);
                 stopWatch.Stop();
 
@@ -321,14 +289,11 @@ namespace SiemensModule
                 {
                     _channelControl.WriteCompleted(tagWrapper.Config.TagId, true, stopWatch.ElapsedMilliseconds);
                     _logger.Debug("Siemens", $"Escritura del tag exitosa. Elapsed: {stopWatch.ElapsedMilliseconds}ms");
-                    
-                    // Publica el nuevo valor para que los suscriptores lo reciban.
                     PostNewEvent(newValue, QualityCodeOptions.Good_Non_Specific, tagWrapper.Config.TagId);
                     return "Ok";
                 }
                 else
                 {
-                    // Caso en que WriteTagAsync devuelve false sin lanzar una excepción.
                     _channelControl.WriteCompleted(tagWrapper.Config.TagId, false, stopWatch.ElapsedMilliseconds);
                     _logger.Error("Siemens", $"La escritura en el tag (ID: {idTag}) falló sin una excepción. Elapsed: {stopWatch.ElapsedMilliseconds}ms");
                     return "Error: La operación de escritura falló.";
@@ -350,9 +315,6 @@ namespace SiemensModule
             }
         }
 
-        /// <summary>
-        /// Libera todos los recursos utilizados por el canal.
-        /// </summary>
         public override void Dispose()
         {
             _logger.Information("Siemens", "Dispose: Solicitud de liberación del canal.");
@@ -373,18 +335,18 @@ namespace SiemensModule
         /// <summary>
         /// Manejador para el evento de lectura programada del planificador.
         /// </summary>
-        private void HandleReadingDue(object? sender, ReadingDueEventArgs e)
+        private void HandleReadingDue(object? sender, SiemensReadingDueEventArgs e)
         {
-            if (!_started) return;
+            if (!_started || e?.Batch == null || e.Batch.Tags == null) return;
 
             try
             {
-                // Construye el diccionario de wrappers a partir de los IDs de los tags a leer.
-                var tagsToReadWrappers = e.TagsToRead.Keys
+                var tagsToReadWrappers = e.Batch.Tags
+                    .Select(cfg => cfg.TagId)
                     .Where(id => _tags.ContainsKey(id))
                     .ToDictionary(id => id, id => _tags[id]);
 
-                if (tagsToReadWrappers.Any())
+                if (tagsToReadWrappers.Count > 0)
                 {
                     var results = _siemensTagReader.ReadManyForSdk(tagsToReadWrappers);
                     ProcessReadResult(results);
@@ -405,7 +367,6 @@ namespace SiemensModule
 
             foreach (var kvp in results)
             {
-                // Cada TagReadResult puede contener varios TagReadResultItem (por lotes)
                 if (kvp.Value.Items != null)
                 {
                     foreach (var item in kvp.Value.Items)
@@ -435,11 +396,9 @@ namespace SiemensModule
                 var quality = tag.Status == SiemensTagWrapper.SiemensTagStatusType.ConfigError
                     ? QualityCodeOptions.Bad_Configuration_Error
                     : QualityCodeOptions.Uncertain_Non_Specific;
-                // Corregido: SiemensTagConfig no tiene InitialValue, usar tag.CurrentValue
                 PostNewEvent(tag.CurrentValue, quality, tag.Config.TagId, timeStamp);
             }
         }
-       
 
         /// <summary>
         /// Envía una calidad de "fuera de servicio" para los tags cuando el canal se detiene.

@@ -1,17 +1,19 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Moq;
+using vNode.Sdk.Data;
+using vNode.Sdk.Logger;
+using vNode.SiemensS7.ChannelConfig;
 using vNode.SiemensS7.Scheduler;
 using vNode.SiemensS7.TagConfig;
-using vNode.Sdk.Logger;
 using Xunit;
 
 public class SiemensSchedulerTests
 {
-    // Método auxiliar para crear un SiemensTagWrapper simulado con configuración básica.
-    private SiemensTagWrapper CreateTagWrapper(Guid id, int pollRate, SiemensTagDataType dataType, string address = "DB1.DBW0")
+    private SiemensTagWrapper CreateTagWrapper(Guid id, int pollRate, SiemensTagDataType dataType, string deviceId = "dev1", string address = "DB1.DBW0", int stringSize = 0)
     {
         var config = new SiemensTagConfig
         {
@@ -19,127 +21,170 @@ public class SiemensSchedulerTests
             PollRate = pollRate,
             DataType = dataType,
             Address = address,
-            StringSize = 10,
-            DeviceId = "dev1"
+            StringSize = (byte)stringSize,
+            DeviceId = deviceId
         };
 
-        var tagModelMock = new Mock<vNode.Sdk.Data.TagModelBase>();
+        var tagModelMock = new Mock<TagModelBase>();
         tagModelMock.SetupGet(t => t.IdTag).Returns(id);
         tagModelMock.SetupGet(t => t.Config).Returns(Newtonsoft.Json.JsonConvert.SerializeObject(config));
         tagModelMock.SetupGet(t => t.InitialValue).Returns((object)null);
 
+        // CORRECTO: solo pasar el tagModelMock y el logger
         return SiemensTagWrapper.Create(tagModelMock.Object, new Mock<ISdkLogger>().Object);
     }
 
-    /// <summary>
-    /// Verifica que el método AddTag agrega correctamente un tag al planificador.
-    /// El test también elimina el tag para asegurar que no lanza excepciones.
-    /// </summary>
     [Fact]
-    public void AddTag_ShouldAddTagToScheduler()
+    public void AddTag_AddsTagWithoutException()
     {
-        var loggerMock = new Mock<ISdkLogger>();
-        var scheduler = new SiemensScheduler(loggerMock.Object);
+        var logger = Mock.Of<ISdkLogger>();
+        var device = new vNode.SiemensS7.ChannelConfig.SiemensDeviceConfig { DeviceId = "dev1", IpAddress = "192.168.0.1" };
+        var scheduler = new SiemensScheduler(new List<vNode.SiemensS7.ChannelConfig.SiemensDeviceConfig> { device }, logger);
 
-        var tag = CreateTagWrapper(Guid.NewGuid(), 100, SiemensTagDataType.Int);
+        var tag = CreateTagWrapper(Guid.NewGuid(), 1000, SiemensTagDataType.Bool);
 
-        scheduler.AddTag(tag);
-
-        // El método privado no es accesible, pero podemos probar agregando y eliminando
-        scheduler.RemoveTag(tag.Config.TagId);
-        // Si no lanza excepción, el test pasa
+        Exception ex = Record.Exception(() => scheduler.AddTag(tag));
+        Assert.Null(ex);
     }
 
-    /// <summary>
-    /// Verifica que el método RemoveTag elimina correctamente un tag del planificador.
-    /// No se espera ninguna excepción durante la operación.
-    /// </summary>
     [Fact]
-    public void RemoveTag_ShouldRemoveTagFromScheduler()
+    public void RemoveTag_RemovesTagWithoutException()
     {
-        var loggerMock = new Mock<ISdkLogger>();
-        var scheduler = new SiemensScheduler(loggerMock.Object);
+        var logger = Mock.Of<ISdkLogger>();
+        var device = new vNode.SiemensS7.ChannelConfig.SiemensDeviceConfig { DeviceId = "dev1", IpAddress = "192.168.0.1" };
+        var scheduler = new SiemensScheduler(new List<vNode.SiemensS7.ChannelConfig.SiemensDeviceConfig> { device }, logger);
 
-        var tag = CreateTagWrapper(Guid.NewGuid(), 100, SiemensTagDataType.Int);
-
+        var tag = CreateTagWrapper(Guid.NewGuid(), 1000, SiemensTagDataType.Bool);
         scheduler.AddTag(tag);
-        scheduler.RemoveTag(tag.Config.TagId);
 
-        // No hay acceso directo, pero no debe lanzar excepción
+        Exception ex = Record.Exception(() => scheduler.RemoveTag(tag.Config.TagId));
+        Assert.Null(ex);
     }
 
-    /// <summary>
-    /// Verifica que el método StartReadingAsync dispara el evento ReadingDue cuando hay tags listos para leer.
-    /// El test agrega un tag y espera que el evento se dispare correctamente.
-    /// </summary>
     [Fact]
-    public async Task StartReadingAsync_ShouldTriggerReadingDueEvent()
+    public void AddTagsBatch_AddsMultipleTags()
     {
-        var loggerMock = new Mock<ISdkLogger>();
-        var scheduler = new SiemensScheduler(loggerMock.Object);
+        var logger = Mock.Of<ISdkLogger>();
+        var device = new vNode.SiemensS7.ChannelConfig.SiemensDeviceConfig { DeviceId = "dev1", IpAddress = "192.168.0.1" };
+        var scheduler = new SiemensScheduler(new List<vNode.SiemensS7.ChannelConfig.SiemensDeviceConfig> { device }, logger);
 
-        var tag = CreateTagWrapper(Guid.NewGuid(), 1, SiemensTagDataType.Int);
+        var tags = new List<SiemensTagWrapper>
+        {
+            CreateTagWrapper(Guid.NewGuid(), 1000, SiemensTagDataType.Bool),
+            CreateTagWrapper(Guid.NewGuid(), 1000, SiemensTagDataType.Word)
+        };
+
+        Exception ex = Record.Exception(() => scheduler.AddTagsBatch(tags));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public void RemoveTags_RemovesMultipleTags()
+    {
+        var logger = Mock.Of<ISdkLogger>();
+        var device = new vNode.SiemensS7.ChannelConfig.SiemensDeviceConfig { DeviceId = "dev1", IpAddress = "192.168.0.1" };
+        var scheduler = new SiemensScheduler(new List<vNode.SiemensS7.ChannelConfig.SiemensDeviceConfig> { device }, logger);
+
+        var tag1 = CreateTagWrapper(Guid.NewGuid(), 1000, SiemensTagDataType.Bool);
+        var tag2 = CreateTagWrapper(Guid.NewGuid(), 1000, SiemensTagDataType.Word);
+
+        scheduler.AddTagsBatch(new List<SiemensTagWrapper> { tag1, tag2 });
+
+        Exception ex = Record.Exception(() => scheduler.RemoveTags(new List<Guid> { tag1.Config.TagId, tag2.Config.TagId }));
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public async Task StartReadingAsync_RaisesReadingDueEvent()
+    {
+        var logger = Mock.Of<ISdkLogger>();
+        var device = new vNode.SiemensS7.ChannelConfig.SiemensDeviceConfig { DeviceId = "dev1", IpAddress = "192.168.0.1" };
+        var scheduler = new SiemensScheduler(new List<vNode.SiemensS7.ChannelConfig.SiemensDeviceConfig> { device }, logger, baseTickMs: 10);
+
+        var tag = CreateTagWrapper(Guid.NewGuid(), 10, SiemensTagDataType.Bool);
         scheduler.AddTag(tag);
 
-        bool eventTriggered = false;
+        SiemensTagBatch? receivedBatch = null;
+        var evt = new ManualResetEventSlim();
+
         scheduler.ReadingDue += (s, e) =>
         {
-            eventTriggered = true;
-            Assert.Contains(tag.Config.TagId, e.TagsToRead.Keys);
+            receivedBatch = e.Batch;
+            evt.Set();
         };
 
         var cts = new CancellationTokenSource();
-        var task = scheduler.StartReadingAsync(cts.Token);
+        var readingTask = scheduler.StartReadingAsync(cts.Token);
 
-        await Task.Delay(10); // Espera breve para permitir el tick
+        Assert.True(evt.Wait(500), "No se disparó el evento ReadingDue");
+
         cts.Cancel();
+        await readingTask;
 
-        await task;
-        Assert.True(eventTriggered);
+        Assert.NotNull(receivedBatch);
+        Assert.Contains(receivedBatch.Tags, t => t.TagId == tag.Config.TagId);
     }
 
-    /// <summary>
-    /// Verifica que el método CreateDueTagBatches agrupa correctamente los tags por tipo de dato y tasa de sondeo.
-    /// Se agregan varios tags y se comprueba que los lotes generados contienen los tipos esperados.
-    /// </summary>
     [Fact]
-    public void CreateDueTagBatches_ShouldGroupTagsCorrectly()
+    public async Task StartReadingAsync_RespectsBatchingLimit()
     {
-        var loggerMock = new Mock<ISdkLogger>();
-        var scheduler = new SiemensScheduler(loggerMock.Object);
+        var logger = Mock.Of<ISdkLogger>();
+        var device = new vNode.SiemensS7.ChannelConfig.SiemensDeviceConfig { DeviceId = "dev1", IpAddress = "192.168.0.1" };
+        var scheduler = new SiemensScheduler(new List<vNode.SiemensS7.ChannelConfig.SiemensDeviceConfig> { device }, logger, baseTickMs: 10);
 
-        var tag1 = CreateTagWrapper(Guid.NewGuid(), 1, SiemensTagDataType.Int, "DB1.DBW0");
-        var tag2 = CreateTagWrapper(Guid.NewGuid(), 1, SiemensTagDataType.Int, "DB1.DBW2");
-        var tag3 = CreateTagWrapper(Guid.NewGuid(), 1, SiemensTagDataType.Bool, "DB1.DBX0.0");
+        // Crea tags que juntos superen los 200 bytes (por ejemplo, 21 tags de tipo Word de 10 bytes cada uno)
+        var tags = new List<SiemensTagWrapper>();
+        for (int i = 0; i < 21; i++)
+        {
+            tags.Add(CreateTagWrapper(Guid.NewGuid(), 10, SiemensTagDataType.String, "dev1", $"DB1.DBB{i * 10}", 10));
+        }
+        scheduler.AddTagsBatch(tags);
+
+        List<SiemensTagBatch> receivedBatches = new();
+        var evt = new ManualResetEventSlim();
+
+        scheduler.ReadingDue += (s, e) =>
+        {
+            receivedBatches.Add(e.Batch);
+            if (receivedBatches.Count >= 2)
+                evt.Set();
+        };
+
+        var cts = new CancellationTokenSource();
+        var readingTask = scheduler.StartReadingAsync(cts.Token);
+
+        Assert.True(evt.Wait(1000), "No se dispararon suficientes eventos ReadingDue para lotes grandes");
+
+        cts.Cancel();
+        await readingTask;
+
+        // Al menos dos lotes, ninguno debe superar los 200 bytes
+        Assert.True(receivedBatches.Count >= 2);
+        foreach (var batch in receivedBatches)
+        {
+            int totalSize = batch.Tags.Sum(t => t.GetSize());
+            Assert.True(totalSize <= 200, $"El lote supera los 200 bytes: {totalSize}");
+        }
+    }
+
+    [Fact]
+    public void GetScheduleStats_ReturnsStats()
+    {
+        var logger = Mock.Of<ISdkLogger>();
+        var device = new vNode.SiemensS7.ChannelConfig.SiemensDeviceConfig { DeviceId = "dev1", IpAddress = "192.168.0.1" };
+        var scheduler = new SiemensScheduler(new List<vNode.SiemensS7.ChannelConfig.SiemensDeviceConfig> { device }, logger);
+
+        var tag1 = CreateTagWrapper(Guid.NewGuid(), 100, SiemensTagDataType.Bool);
+        var tag2 = CreateTagWrapper(Guid.NewGuid(), 200, SiemensTagDataType.Word);
 
         scheduler.AddTag(tag1);
         scheduler.AddTag(tag2);
-        scheduler.AddTag(tag3);
 
-        // Forzar que los tags estén "due"
-        Thread.Sleep(2);
+        var stats = scheduler.GetScheduleStats();
 
-        var batches = scheduler.CreateDueTagBatches();
-
-        Assert.NotEmpty(batches);
-        Assert.Contains(batches, b => b.DataType == SiemensTagDataType.Int);
-        Assert.Contains(batches, b => b.DataType == SiemensTagDataType.Bool);
-    }
-
-    /// <summary>
-    /// Verifica que no se agregan tags al planificador si su PollRate es igual a cero.
-    /// El método AddTag debe ignorar estos tags sin lanzar excepción.
-    /// </summary>
-    [Fact]
-    public void AddTag_ShouldNotAddTagWithZeroPollRate()
-    {
-        var loggerMock = new Mock<ISdkLogger>();
-        var scheduler = new SiemensScheduler(loggerMock.Object);
-
-        var tag = CreateTagWrapper(Guid.NewGuid(), 0, SiemensTagDataType.Int);
-
-        scheduler.AddTag(tag);
-
-        // No debe lanzar excepción, pero el tag no se planifica
+        Assert.Contains(100, stats.Keys);
+        Assert.Contains(200, stats.Keys);
+        Assert.True(stats[100].TagCount >= 1);
+        Assert.True(stats[200].TagCount >= 1);
     }
 }
