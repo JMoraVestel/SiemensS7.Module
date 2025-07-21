@@ -30,12 +30,11 @@ public class SiemensSchedulerTests
         tagModelMock.SetupGet(t => t.Config).Returns(Newtonsoft.Json.JsonConvert.SerializeObject(config));
         tagModelMock.SetupGet(t => t.InitialValue).Returns((object)null);
 
-        // CORRECTO: solo pasar el tagModelMock y el logger
         return SiemensTagWrapper.Create(tagModelMock.Object, new Mock<ISdkLogger>().Object);
     }
 
     [Fact]
-    public void AddTag_AddsTagWithoutException()
+    public void AddTag_DoesNotThrow()
     {
         var logger = Mock.Of<ISdkLogger>();
         var device = new vNode.SiemensS7.ChannelConfig.SiemensDeviceConfig { DeviceId = "dev1", IpAddress = "192.168.0.1" };
@@ -48,7 +47,7 @@ public class SiemensSchedulerTests
     }
 
     [Fact]
-    public void RemoveTag_RemovesTagWithoutException()
+    public void RemoveTag_DoesNotThrow()
     {
         var logger = Mock.Of<ISdkLogger>();
         var device = new vNode.SiemensS7.ChannelConfig.SiemensDeviceConfig { DeviceId = "dev1", IpAddress = "192.168.0.1" };
@@ -62,7 +61,7 @@ public class SiemensSchedulerTests
     }
 
     [Fact]
-    public void AddTagsBatch_AddsMultipleTags()
+    public void AddTagsBatch_DoesNotThrow()
     {
         var logger = Mock.Of<ISdkLogger>();
         var device = new vNode.SiemensS7.ChannelConfig.SiemensDeviceConfig { DeviceId = "dev1", IpAddress = "192.168.0.1" };
@@ -79,7 +78,7 @@ public class SiemensSchedulerTests
     }
 
     [Fact]
-    public void RemoveTags_RemovesMultipleTags()
+    public void RemoveTags_DoesNotThrow()
     {
         var logger = Mock.Of<ISdkLogger>();
         var device = new vNode.SiemensS7.ChannelConfig.SiemensDeviceConfig { DeviceId = "dev1", IpAddress = "192.168.0.1" };
@@ -126,13 +125,13 @@ public class SiemensSchedulerTests
     }
 
     [Fact]
-    public async Task StartReadingAsync_RespectsBatchingLimit()
+    public async Task StartReadingAsync_BatchingLimitIsRespected()
     {
         var logger = Mock.Of<ISdkLogger>();
         var device = new vNode.SiemensS7.ChannelConfig.SiemensDeviceConfig { DeviceId = "dev1", IpAddress = "192.168.0.1" };
         var scheduler = new SiemensScheduler(new List<vNode.SiemensS7.ChannelConfig.SiemensDeviceConfig> { device }, logger, baseTickMs: 10);
 
-        // Crea tags que juntos superen los 200 bytes (por ejemplo, 21 tags de tipo Word de 10 bytes cada uno)
+        // Crea tags que juntos superen los 200 bytes (por ejemplo, 21 tags de tipo String de 10 bytes cada uno)
         var tags = new List<SiemensTagWrapper>();
         for (int i = 0; i < 21; i++)
         {

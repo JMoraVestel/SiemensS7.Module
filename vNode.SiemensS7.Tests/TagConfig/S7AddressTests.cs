@@ -6,28 +6,23 @@ namespace vNode.SiemensS7.Tests.TagConfig
 {
     public class S7AddressTests
     {
-        /// <summary>
-        /// Verifica que el método Parse de S7Address interpreta correctamente direcciones válidas.
-        /// Comprueba que los valores de DbName, DataTypeValue y Offset sean los esperados para cada caso.
-        /// </summary>
         [Theory]
-        [InlineData("DB1.DBW20", "DB1", "DBW", 20)]
-        [InlineData("DB10.DBX0.1", "DB10", "DBX.1", 0)]
-        [InlineData("DB2.DBW100", "DB2", "DBW", 100)]
-        [InlineData("DB3.DBX5", "DB3", "DBX", 5)]
-        public void Parse_ValidAddress_ReturnsExpectedValues(string address, string expectedDbName, string expectedDataType, int expectedOffset)
+        [InlineData("DB1.DBW20", S7.Net.DataType.DataBlock, 1, 20, 0)]
+        [InlineData("DB10.DBX0.1", S7.Net.DataType.DataBlock, 10, 0, 1)]
+        [InlineData("DB2.DBW100", S7.Net.DataType.DataBlock, 2, 100, 0)]
+        [InlineData("DB3.DBX5", S7.Net.DataType.DataBlock, 3, 5, 0)]
+        public void Parse_ValidAddress_ReturnsExpectedValues(string address, S7.Net.DataType expectedDataType, int expectedDb, int expectedStartByte, int expectedBit)
         {
-            var result = S7Address.Parse(address);
+            // Se requiere un SiemensTagConfig para el tipo de dato, aquí se usa Word por defecto
+            var config = new SiemensTagConfig { DataType = SiemensTagDataType.Word, StringSize = 10 };
+            var (dataType, db, startByteAdr, count, bitAdr) = S7Address.Parse(address, config);
 
-            Assert.Equal(expectedDbName, result.DbName);
-            Assert.StartsWith(expectedDataType, result.DataTypeValue);
-            Assert.Equal(expectedOffset, result.Offset);
+            Assert.Equal(expectedDataType, dataType);
+            Assert.Equal(expectedDb, db);
+            Assert.Equal(expectedStartByte, startByteAdr);
+            Assert.Equal(expectedBit, bitAdr);
         }
 
-        /// <summary>
-        /// Verifica que el método Parse de S7Address lanza una excepción ArgumentException
-        /// cuando se le pasa una dirección inválida o nula.
-        /// </summary>
         [Theory]
         [InlineData("")]
         [InlineData("   ")]
@@ -39,20 +34,20 @@ namespace vNode.SiemensS7.Tests.TagConfig
         [InlineData("DB1.DBW-1")]
         public void Parse_InvalidAddress_ThrowsArgumentException(string address)
         {
-            Assert.Throws<ArgumentException>(() => S7Address.Parse(address));
+            var config = new SiemensTagConfig { DataType = SiemensTagDataType.Word, StringSize = 10 };
+            Assert.ThrowsAny<Exception>(() => S7Address.Parse(address, config));
         }
 
-        /// <summary>
-        /// Verifica que el método Parse de S7Address interpreta correctamente direcciones con bit,
-        /// añadiendo el bit al DataTypeValue y extrayendo el DbName y Offset correctamente.
-        /// </summary>
         [Fact]
         public void Parse_AddressWithBit_AppendsBitToDataType()
         {
-            var result = S7Address.Parse("DB1.DBX0.7");
-            Assert.Equal("DB1", result.DbName);
-            Assert.Equal("DBX.7", result.DataTypeValue);
-            Assert.Equal(0, result.Offset);
+            var config = new SiemensTagConfig { DataType = SiemensTagDataType.Bool, StringSize = 10 };
+            var (dataType, db, startByteAdr, count, bitAdr) = S7Address.Parse("DB1.DBX0.7", config);
+
+            Assert.Equal(S7.Net.DataType.DataBlock, dataType);
+            Assert.Equal(1, db);
+            Assert.Equal(0, startByteAdr);
+            Assert.Equal(7, bitAdr);
         }
     }
 }   

@@ -1,51 +1,100 @@
 ﻿using System;
-using System.Globalization;
 using System.Text;
 using vNode.SiemensS7.TagConfig;
+using S7.Net;
+using S7.Net.Types;
 
 namespace vNode.SiemensS7.TagReader
 {
     public static class SiemensDataConverter
     {
         /// <summary>
-        /// Convierte un valor leído del PLC a un tipo de dato de .NET.
+        /// Convierte un valor leído de un buffer de bytes a un tipo de dato de .NET.
+        /// Este método está diseñado para extraer un valor de un buffer más grande usando un offset.
         /// </summary>
-        public static object ConvertFromPlc(SiemensTagConfig config, object rawValue)
+        public static object ConvertFromPlc(
+            SiemensTagConfig config,
+            byte[] rawBytes,
+            int byteIndex = 0,
+            int bitIndex = 0)
         {
-            if (rawValue == null) return null;
+            if (rawBytes == null)
+                throw new ArgumentNullException(nameof(rawBytes), "El array de bytes no puede ser nulo.");
+
+            // El tipo Bool se maneja a nivel de bit dentro de un byte.
+            if (config.DataType == SiemensTagDataType.Bool)
+            {
+                if (rawBytes.Length <= byteIndex)
+                    throw new ArgumentOutOfRangeException(nameof(byteIndex), "El índice de byte está fuera del rango del buffer.");
+                // Se extrae el bit específico del byte correspondiente.
+                return (rawBytes[byteIndex] & (1 << bitIndex)) != 0;
+            }
+
+            // Para otros tipos, se extrae el número exacto de bytes del buffer.
+            int size = config.GetSize();
+            if (rawBytes.Length < byteIndex + size)
+                throw new ArgumentException($"Buffer de bytes insuficiente para el tipo {config.DataType} en el offset {byteIndex}.");
+
+            byte[] dataBytes = new byte[size];
+            Array.Copy(rawBytes, byteIndex, dataBytes, 0, size);
 
             switch (config.DataType)
             {
-                case SiemensTagDataType.Bool:
-                    return (bool)rawValue;
-                case SiemensTagDataType.Byte:
-                    return (byte)rawValue;
-                case SiemensTagDataType.Word:
-                    return (ushort)rawValue;
-                case SiemensTagDataType.DWord:
-                    return (uint)rawValue;
-                case SiemensTagDataType.Int:
-                    return (short)rawValue;
-                case SiemensTagDataType.DInt:
-                    return (int)rawValue;
-                case SiemensTagDataType.Real:
-                    // El valor viene como uint, hay que convertirlo a array de bytes y luego a float.
-                    if (rawValue is uint uintVal)
-                    {
-                        return BitConverter.ToSingle(BitConverter.GetBytes(uintVal), 0);
-                    }
-                    return Convert.ToSingle(rawValue);
                 case SiemensTagDataType.String:
-                    if (rawValue is byte[] bytes)
-                    {
-                        if (bytes.Length < 2) return "";
-                        int len = bytes[1]; // Longitud actual de la cadena.
-                        return Encoding.ASCII.GetString(bytes, 2, len);
-                    }
-                    return rawValue.ToString();
-                // Añadir aquí otros tipos de datos si es necesario (DATE, TIME, etc.)
+                    return S7.Net.Types.String.FromByteArray(dataBytes);
+                case SiemensTagDataType.Byte:
+                    return dataBytes[0]; // Para un solo byte, la conversión es directa.
+                case SiemensTagDataType.Word:
+                    return Word.FromByteArray(dataBytes);
+                case SiemensTagDataType.DWord:
+                    return DWord.FromByteArray(dataBytes);
+                case SiemensTagDataType.Int:
+                    return Int.FromByteArray(dataBytes);
+                case SiemensTagDataType.DInt:
+                    return DInt.FromByteArray(dataBytes);
+                case SiemensTagDataType.Real:
+                    return Real.FromByteArray(dataBytes);
                 default:
-                    return rawValue;
+                    throw new NotSupportedException($"Tipo de dato '{config.DataType}' no soportado para lectura desde buffer.");
+            }
+        }
+
+        /// <summary>
+        /// Lee un tag del PLC y convierte su valor a un tipo de dato de .NET.
+        /// </summary>
+        public static object ReadAndConvertFromPlc(
+            Plc plc,
+            SiemensTagConfig config)
+        {
+            var (dataType, db, startByteAdr, count, bitAdr) = S7Address.Parse(config.Address, config);
+
+            if (config.DataType == SiemensTagDataType.Bool)
+            {
+                var byteValue = plc.ReadBytes(dataType, db, startByteAdr, 1);
+                return (byteValue[0] & (1 << bitAdr)) != 0;
+            }
+
+            var rawBytes = plc.ReadBytes(dataType, db, startByteAdr, count);
+
+            // Cuando se lee directamente, el array de bytes ya tiene el tamaño exacto.
+            switch (config.DataType)
+            {
+                case SiemensTagDataType.String:
+                    return S7.Net.Types.String.FromByteArray(rawBytes);
+                case SiemensTagDataType.Byte:
+                    return rawBytes[0];
+                case SiemensTagDataType.Word:
+                    return Word.FromByteArray(rawBytes);
+                case SiemensTagDataType.DWord:
+                    return DWord.FromByteArray(rawBytes);
+                case SiemensTagDataType.Int:
+                    return Int.FromByteArray(rawBytes);
+                case SiemensTagDataType.DInt:
+                    return DInt.FromByteArray(rawBytes);
+                case SiemensTagDataType.Real:
+                    return Real.FromByteArray(rawBytes);
+                default:
+                    throw new NotSupportedException($"Tipo de dato '{config.DataType}' no soportado para lectura.");
             }
         }
 
@@ -77,7 +126,6 @@ namespace vNode.SiemensS7.TagReader
                         return Convert.ToSingle(value);
                     case SiemensTagDataType.String:
                         return value.ToString();
-                    // Añadir aquí otros tipos de datos si es necesario
                     default:
                         throw new NotSupportedException($"El tipo de dato '{config.DataType}' no está soportado para escritura.");
                 }

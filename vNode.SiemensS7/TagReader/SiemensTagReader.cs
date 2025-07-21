@@ -40,7 +40,7 @@ namespace vNode.SiemensS7.TagReader
                 try
                 {
                     var raw = _connection.Read(tag.Config.Address);
-                    var value = SiemensDataConverter.ConvertFromPlc(tag.Config, raw);
+                    var value = SiemensDataConverter.ConvertFromPlc(tag.Config, (byte[])raw, 0, 0);
                     results[tagName] = value;
                 }
                 catch (Exception ex)
@@ -76,8 +76,8 @@ namespace vNode.SiemensS7.TagReader
                 try
                 {
                     var rawValue = _connection.Read(tagWrapper.Config.Address);
-                    var convertedValue = SiemensDataConverter.ConvertFromPlc(tagWrapper.Config, rawValue);
-                    var resultItem = new TagReadResultItem(batchItem, (TagReadResultType) convertedValue, TagReadResult.TagReadResultType.Success);
+                    var convertedValue = SiemensDataConverter.ConvertFromPlc(tagWrapper.Config, (byte[])rawValue, 0 ,0);
+                    var resultItem = new TagReadResultItem(batchItem, TagReadResult.TagReadResultType.Success, convertedValue);
                     successfulItems.Add(resultItem);
                 }
                 catch (Exception ex)

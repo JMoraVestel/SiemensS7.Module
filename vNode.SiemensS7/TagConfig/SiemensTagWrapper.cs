@@ -110,7 +110,7 @@ namespace vNode.SiemensS7.TagConfig
             // Validar que la dirección sea válida según S7NetPlus
             try
             {
-                var parsedAddress = ParseAddress(config.Address); // Línea corregida
+                var parsedAddress = ParseAddress(config.Address, config); // Línea corregida
                 if (parsedAddress == null)
                 {
                     error = $"Invalid address format: {config.Address}.";
@@ -126,7 +126,7 @@ namespace vNode.SiemensS7.TagConfig
             return true;
         }
 
-        private static object ParseAddress(string address)
+        private static object ParseAddress(string address, SiemensTagConfig config)
         {
             if (string.IsNullOrWhiteSpace(address))
             {
@@ -137,7 +137,7 @@ namespace vNode.SiemensS7.TagConfig
             {
                 // Utilizar la clase S7Address para analizar la dirección.
                 // Se confía en que S7Address.Parse realiza toda la validación necesaria.
-                return S7Address.Parse(address);
+                return S7Address.Parse(address, config);
             }
             catch (Exception ex)
             {

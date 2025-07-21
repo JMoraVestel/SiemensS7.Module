@@ -1,120 +1,42 @@
-﻿using S7.Net.Types;
+﻿using S7.Net;
 using System;
 using System.Text.RegularExpressions;
 
 namespace vNode.SiemensS7.TagConfig
 {
-    /// <summary>
-    /// Parsea y representa una dirección de memoria de un PLC Siemens S7.
-    /// </summary>
-    public class S7Address
+    // Objeto de resultado para los tests y validaciones
+    public class S7ParsedAddress
     {
-        /// <summary>
-        /// Nombre del bloque de datos. Ejemplo: "DB1".
-        /// </summary>
-        public string DbName { get; private set; }
-
-        /// <summary>
-        /// Define las áreas de memoria disponibles en un PLC Siemens S7,
-        /// según los códigos de tipo utilizados por el protocolo S7.
-        /// </summary>
-        public enum DataType
-        {
-            Input = 129,
-            Output = 130,
-            Memory = 131,
-            DataBlock = 132,
-            Counter = 28,
-            Timer = 29
-        }
-
-        /// <summary>
-        /// Tipo de dato asociado a la dirección.
-        /// </summary>
-        public string DataTypeValue { get; private set; }
-
-        /// <summary>
-        /// Desplazamiento (offset) dentro del bloque de datos.
-        /// </summary>
-        public int Offset { get; private set; }
-
-        private S7Address() { }
-
-        /// <summary>
-        /// Parsea una cadena de dirección de un tag Siemens.
-        /// Ejemplos: "DB1.DBW20", "DB10.DBX0.1".
-        /// </summary>
-        /// <param name="fullAddress">La dirección completa a parsear.</param>
-        /// <returns>Una instancia de S7Address con la dirección descompuesta.</returns>
-        /// <exception cref="ArgumentException">Si el formato de la dirección es inválido.</exception>
-        public static S7Address Parse(string fullAddress)
-        {
-            if (string.IsNullOrWhiteSpace(fullAddress))
-            {
-                throw new ArgumentException("La dirección no puede ser nula o vacía.", nameof(fullAddress));
-            }
-
-            // Expresión regular para capturar las partes de la dirección.
-            // Grupo 1: DbName (ej. DB1)
-            // Grupo 2: DataType (ej. DBW, DBX)
-            // Grupo 3: Offset (ej. 20, 0)
-            // Grupo 4: Opcional, bit (ej. .1)
-            var match = Regex.Match(fullAddress.Trim(), @"^(DB\d+)\.(DB[XWD])(\d+)(\.\d+)?$", RegexOptions.IgnoreCase);
-
-            if (!match.Success)
-            {
-                throw new ArgumentException($"El formato de la dirección '{fullAddress}' no es válido. Se esperaba un formato como 'DB1.DBW20'.");
-            }
-
-            var s7Addr = new S7Address
-            {
-                DbName = match.Groups[1].Value.ToUpper(),
-                DataTypeValue = match.Groups[2].Value.ToUpper(),
-                Offset = int.Parse(match.Groups[3].Value)
-            };
-
-            // Si hay un bit, se añade al tipo de dato para mantener la información.
-            if (match.Groups[4].Success)
-            {
-                s7Addr.DataTypeValue += match.Groups[4].Value;
-            }
-
-            return s7Addr;
-        }
+        public string DbName { get; set; }
+        public string DataTypeValue { get; set; }
+        public int Offset { get; set; }
     }
 
-    /// <summary>
-    /// Configuración de un dispositivo Siemens.
-    /// </summary>
-    public class SiemensDeviceConfig
+    public static class S7Address
     {
-        public string NodeName { get; set; }
-        public string IpAddress { get; set; }
-        public string CpuType { get; set; }
-        public int Rack { get; set; }
-        public int Slot { get; set; }
-        public int PollingIntervalMs { get; set; }
-        public Device Devices { get; set; }
-        public Tag[] Tags { get; set; }
+        // Regex para DB1.DBW20, DB10.DBX0.1, DB2.DBW100, DB3.DBX5
+        private static readonly Regex DbRegex = new Regex(
+            @"^(DB(?<db>\d+))\.(DB(?<type>[XBWDS])(?<byte>\d+))(?:\.(?<bit>\d+))?$",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
-        public class Device
+        public static (DataType dataType, int db, int startByteAdr, int count, int bitAdr) Parse(string address, SiemensTagConfig config)
         {
-            public string DeviceId { get; set; }
-            public string Description { get; set; }
-        }
+            if (string.IsNullOrWhiteSpace(address))
+                throw new ArgumentException("La dirección no puede ser nula o vacía.", nameof(address));
 
-        public class Tag
-        {
-            public string TagId { get; set; }
-            public string Name { get; set; }
-            public string Address { get; set; }
-            public string DataType { get; set; }
-            public int PollRate { get; set; }
-            public int? BitNumber { get; set; }
-            public int StringSize { get; set; }
-            public int ArraySize { get; set; }
-            public bool IsReadOnly { get; set; }
-            public string DeviceId { get; set; }
+            var match = DbRegex.Match(address.Trim());
+            if (!match.Success)
+                throw new ArgumentException($"Formato de dirección S7 inválido: {address}");
+
+            int db = int.Parse(match.Groups["db"].Value);
+            string type = match.Groups["type"].Value.ToUpper();
+            int startByteAdr = int.Parse(match.Groups["byte"].Value);
+            int bitAdr = match.Groups["bit"].Success ? int.Parse(match.Groups["bit"].Value) : (config.BitNumber ?? 0);
+
+            DataType dataType = DataType.DataBlock;
+            int count = config.GetSize();
+
+            return (dataType, db, startByteAdr, count, bitAdr);
         }
     }
 }
