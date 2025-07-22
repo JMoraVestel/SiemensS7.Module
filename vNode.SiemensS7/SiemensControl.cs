@@ -25,18 +25,19 @@ namespace SiemensModule
             _channels.TryAdd(channelId, channel);
         }
 
-        public void UnregisterChannel(Siemens channel)
+        public void UnregisterChannel(Guid channelId)
         {
-            if (_channels.TryRemove(channel.IdChannel, out var removedChannel))
+            if (_channels.TryRemove(channelId, out var removedChannel))
             {
-                _logger.Information("SiemensControl", $"Channel with ID {channel.IdChannel} has been unregistered.");
-                tagsCount -= removedChannel.TagsCount;
+                int removedTagsCount = removedChannel.TagsCount;
+                _logger.Information("SiemensControl", $"Channel with ID {channelId} has been unregistered.");
+                tagsCount -= removedTagsCount;
                 PostNewEvent("Instances", _channels.Count);
                 PostNewEvent("TagsCount", tagsCount);
             }
             else
             {
-                _logger.Warning("SiemensControl", $"Attempted to unregister a channel with ID {channel.IdChannel} that was not found.");
+                _logger.Warning("SiemensControl", $"Attempted to unregister a channel with ID {channelId} that was not found.");
             }
         }
 
@@ -150,5 +151,6 @@ namespace SiemensModule
             // Add logic to stop the channel  
             return true; // Placeholder implementation  
         }
+        
     }
 }

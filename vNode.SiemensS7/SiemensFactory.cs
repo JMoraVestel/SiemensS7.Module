@@ -5,6 +5,7 @@ using vNode.Sdk.Base;
 using vNode.Sdk.Data;
 using vNode.Sdk.Logger;
 using vNode.SiemensS7.ChannelConfig;
+using vNode.SiemensS7.Scheduler;
 
 namespace SiemensModule
 {
@@ -32,11 +33,13 @@ namespace SiemensModule
         public override BaseChannel CreateBaseChannel(string nodeName, string config, ISdkLogger logger)
         {
             var jsonConfig = JsonSerializer.Deserialize<JsonObject>(config);
-            var idChannel = Guid.NewGuid(); // O recibe el idChannel como parámetro si lo tienes
             if (_control == null)
                 _control = new SiemensControl(logger);
 
-            var channel = new Siemens(idChannel, nodeName, jsonConfig, logger, _control);
+            var channelConfig = SiemensChannelConfig.FromJson(jsonConfig);
+
+            // Siemens debe heredar de BaseChannel
+            var channel = new Siemens(channelConfig, logger, _control);
             return channel;
         }
 

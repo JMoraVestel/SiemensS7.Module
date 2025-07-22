@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using vNode.Sdk.Data;
 using vNode.Sdk.Logger;
 using vNode.SiemensS7.ChannelConfig;
 using vNode.SiemensS7.TagConfig;
@@ -316,14 +317,70 @@ namespace vNode.SiemensS7.Scheduler
     /// </summary>
     public class Siemens
     {
+        private readonly ISdkLogger _logger;
+        private readonly SiemensScheduler _scheduler;
+        private readonly SiemensControl _siemensControl;
+        private readonly Dictionary<Guid, SiemensTagWrapper> _tags = new();
+        private CancellationTokenSource? _cts;
+        private Task? _readingTask;
+
         public Siemens(SiemensChannelConfig config, ISdkLogger logger, SiemensControl siemensControl)
         {
-            // Inicialización del canal
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _siemensControl = siemensControl ?? throw new ArgumentNullException(nameof(siemensControl));
+            _scheduler = new SiemensScheduler(config.Devices.Values.ToList(), logger);
         }
 
         public void RegisterTag(SiemensTagConfig tagConfig)
         {
-            // Lógica para crear el wrapper y añadirlo al scheduler y diagnóstico
+            if (tagConfig == null)
+                throw new ArgumentNullException(nameof(tagConfig));
+
+            var tagModel = new TagModelBase
+            {
+                IdTag = tagConfig.TagId,
+                Config = Newtonsoft.Json.JsonConvert.SerializeObject(tagConfig),
+                InitialValue = null
+            };
+
+            var wrapper = SiemensTagWrapper.Create(tagModel, _logger);
+
+            _tags[tagConfig.TagId] = wrapper;
+            _scheduler.AddTag(wrapper);
+            _siemensControl.RegisterTag(tagModel);
+
+            _logger.Information("Siemens", $"Tag registrado: {tagConfig.Name} ({tagConfig.TagId})");
+        }
+
+        public void Start()
+        {
+            if (_cts != null)
+                return; // Ya está iniciado
+
+            _cts = new CancellationTokenSource();
+            _readingTask = _scheduler.StartReadingAsync(_cts.Token);
+            _logger.Information("Siemens", "Canal Siemens iniciado.");
+        }
+
+        public void Stop()
+        {
+            if (_cts == null)
+                return; // Ya está detenido
+
+            _scheduler.StopReading();
+            _cts.Cancel();
+            try
+            {
+                _readingTask?.Wait(500);
+            }
+            catch { /* Ignorar excepciones de cancelación */ }
+            finally
+            {
+                _cts.Dispose();
+                _cts = null;
+                _readingTask = null;
+            }
+            _logger.Information("Siemens", "Canal Siemens detenido.");
         }
     }
 }
