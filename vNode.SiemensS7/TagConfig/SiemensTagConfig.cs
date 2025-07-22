@@ -1,6 +1,6 @@
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 using System.Text.Json.Nodes;
-using System.Text.Json.Serialization;
 
 namespace vNode.SiemensS7.TagConfig
 {
@@ -50,7 +50,7 @@ namespace vNode.SiemensS7.TagConfig
         /// Tipo de dato del tag.
         /// </summary>
         [Newtonsoft.Json.JsonRequired]
-        [Newtonsoft.Json.JsonConverter(typeof(JsonStringEnumConverter))]
+        [JsonConverter(typeof(StringEnumConverter))]
         public SiemensTagDataType DataType { get; set; } // Tipo de dato  
 
         /// <summary>
@@ -119,6 +119,7 @@ namespace vNode.SiemensS7.TagConfig
     /// <summary>
     /// Tipos de datos soportados por los tags Siemens.
     /// </summary>
+    [Newtonsoft.Json.JsonConverter(typeof(StringEnumConverter))]
     public enum SiemensTagDataType
     {
         Bool,

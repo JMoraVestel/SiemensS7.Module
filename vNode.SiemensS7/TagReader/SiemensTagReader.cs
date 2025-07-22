@@ -58,7 +58,7 @@ namespace vNode.SiemensS7.TagReader
         /// </summary>
         /// <param name="tagsToRead">Diccionario de tags a leer.</param>
         /// <returns>Un diccionario que contiene los resultados de la lectura.</returns>
-        public Dictionary<Guid, TagReadResult> ReadManyForSdk(Dictionary<Guid, SiemensTagWrapper> tagsToRead)
+        public virtual Dictionary<Guid, TagReadResult> ReadManyForSdk(Dictionary<Guid, SiemensTagWrapper> tagsToRead)
         {
             var results = new Dictionary<Guid, TagReadResult>();
             var successfulItems = new List<TagReadResultItem>();
@@ -83,6 +83,12 @@ namespace vNode.SiemensS7.TagReader
                 catch (Exception ex)
                 {
                     _logger.Error(ex, "SiemensTagReader", $"Error al leer el tag '{tagWrapper.Name}' ({tagWrapper.Config.Address}).");
+                    var resultItem = new TagReadResultItem(
+                        batchItem,
+                        TagReadResult.TagReadResultType.OtherError,
+                        null,
+                        QualityCodeOptions.Bad_Non_Specific // O el valor que corresponda
+                    );
                     failedItems.Add(batchItem);
                 }
             }
@@ -102,6 +108,7 @@ namespace vNode.SiemensS7.TagReader
 
             return results;
         }
+
 
         private object ConvertValue(object raw, string dataType)
         {

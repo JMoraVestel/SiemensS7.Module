@@ -30,8 +30,14 @@ namespace SiemensModule
         private readonly SiemensScheduler _scheduler;
         private readonly SiemensControl _siemensControl;
         private readonly Dictionary<Guid, SiemensTagWrapper> _tags = new();
+        private readonly Dictionary<string, SiemensTagReader> _tagReaders = new(); // DeviceId -> TagReader
         private CancellationTokenSource? _cts;
         private Task? _readingTask;
+        
+        /// <summary>
+        /// Evento que se dispara cuando se procesa un nuevo dato.
+        /// </summary>
+        public new event Action<RawData>? OnPostNewEvent;
 
         /// <summary>
         /// Constructor para el canal Siemens.
@@ -39,12 +45,60 @@ namespace SiemensModule
         /// <param name="config">Configuración del canal.</param>
         /// <param name="logger">Instancia del logger para registrar eventos.</param>
         /// <param name="siemensControl">Instancia del control Siemens para gestionar la comunicación.</param>
-        /// 
         public Siemens(SiemensChannelConfig config, ISdkLogger logger, SiemensControl siemensControl)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _siemensControl = siemensControl ?? throw new ArgumentNullException(nameof(siemensControl));
             _scheduler = new SiemensScheduler(config.Devices.Values.ToList(), logger);
+
+            // Instancia un TagReader por cada PLC
+            foreach (var kvp in config.Devices)
+            {
+                var device = kvp.Value;
+                var tcpConnection = new SiemensTcpStrategy(
+                    device.IpAddress,
+                    (short)device.Rack,
+                    (short)device.Slot
+                );
+                _tagReaders[device.DeviceId] = new SiemensTagReader(tcpConnection, config, logger);
+            }
+
+            _scheduler.ReadingDue += Scheduler_ReadingDue;
+        }
+
+        private void Scheduler_ReadingDue(object? sender, SiemensReadingDueEventArgs e)
+        {
+            // Agrupa los wrappers por DeviceId
+            var wrappersByDevice = e.Batch.Tags
+                .Select(tc => _tags.TryGetValue(tc.TagId, out var wrapper) ? wrapper : null)
+                .Where(w => w != null)
+                .GroupBy(w => w.Config.DeviceId);
+
+            foreach (var group in wrappersByDevice)
+            {
+                var deviceId = group.Key;
+                if (!_tagReaders.TryGetValue(deviceId, out var tagReader))
+                {
+                    _logger.Error("Siemens", $"No se encontró TagReader para el DeviceId '{deviceId}'.");
+                    continue;
+                }
+
+                var wrappersDict = group.ToDictionary(w => w.Config.TagId, w => w);
+                var results = tagReader.ReadManyForSdk(wrappersDict);
+
+                foreach (var result in results.Values)
+                {
+                    foreach (var item in result.Items)
+                    {
+                        var rawData = new RawData(
+                            value: item.Value,
+                            quality: item.Quality,
+                            idTag: item.BatchItem.Tag.Config.TagId
+                        );
+                        ProcessData(rawData);
+                    }
+                }
+            }
         }
 
         public override bool ContainsTag(Guid idTag)
@@ -79,7 +133,7 @@ namespace SiemensModule
 
         public override void ProcessData(RawData rawData)
         {
-            throw new NotImplementedException();
+            OnPostNewEvent?.Invoke(rawData);
         }
 
         /// <summary>
