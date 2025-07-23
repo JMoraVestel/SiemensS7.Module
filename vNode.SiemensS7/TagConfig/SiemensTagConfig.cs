@@ -73,12 +73,14 @@ namespace vNode.SiemensS7.TagConfig
         {
             var config = new SiemensTagConfig
             {
-                TagId = Guid.NewGuid(), // Generar un ID único para el tag  
+                Name = json["name"]?.ToString(),
+                TagId = Guid.TryParse(json["tagId"]?.ToString(), out var tagId) ? tagId : Guid.NewGuid(),
                 Address = json["address"]?.ToString() ?? throw new ArgumentException("Falta la dirección del tag"),
                 PollRate = int.Parse(json["pollRate"]?.ToString() ?? "1000"),
                 DataType = Enum.Parse<SiemensTagDataType>(json["dataType"]?.ToString() ?? throw new ArgumentException("Falta el tipo de dato del tag"), true),
                 ArraySize = int.Parse(json["arraySize"]?.ToString() ?? "0"),
-                IsReadOnly = bool.Parse(json["isReadOnly"]?.ToString() ?? "false")
+                IsReadOnly = bool.Parse(json["isReadOnly"]?.ToString() ?? "false"),
+                DeviceId = json["deviceId"]?.ToString() ?? throw new ArgumentException("Falta el DeviceId del tag")
             };
 
             if (json.ContainsKey("bitNumber"))
