@@ -41,7 +41,17 @@ namespace vNode.SiemensS7.TagReader
             switch (config.DataType)
             {
                 case SiemensTagDataType.String:
-                    return S7.Net.Types.String.FromByteArray(dataBytes);
+                    // S7 String tiene 2 bytes de cabecera (MaxLen, ActualLen)
+                    // que deben ser omitidos para obtener la cadena de caracteres.
+                    if (dataBytes.Length < 2)
+                        return string.Empty;
+                    var actualLen = dataBytes[1];
+                    if (actualLen == 0)
+                        return string.Empty;
+                    // Asegurarse de no leer más allá del buffer si la longitud real es incorrecta.
+                    if (actualLen > dataBytes.Length - 2)
+                        actualLen = (byte)(dataBytes.Length - 2);
+                    return Encoding.ASCII.GetString(dataBytes, 2, actualLen);
                 case SiemensTagDataType.Byte:
                     return dataBytes[0]; // Para un solo byte, la conversión es directa.
                 case SiemensTagDataType.Word:
@@ -80,7 +90,17 @@ namespace vNode.SiemensS7.TagReader
             switch (config.DataType)
             {
                 case SiemensTagDataType.String:
-                    return S7.Net.Types.String.FromByteArray(rawBytes);
+                    // S7 String tiene 2 bytes de cabecera (MaxLen, ActualLen)
+                    // que deben ser omitidos para obtener la cadena de caracteres.
+                    if (rawBytes.Length < 2)
+                        return string.Empty;
+                    var actualLen = rawBytes[1];
+                    if (actualLen == 0)
+                        return string.Empty;
+                    // Asegurarse de no leer más allá del buffer si la longitud real es incorrecta.
+                    if (actualLen > rawBytes.Length - 2)
+                        actualLen = (byte)(rawBytes.Length - 2);
+                    return Encoding.ASCII.GetString(rawBytes, 2, actualLen);
                 case SiemensTagDataType.Byte:
                     return rawBytes[0];
                 case SiemensTagDataType.Word:

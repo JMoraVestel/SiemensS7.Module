@@ -31,6 +31,11 @@ public class SiemensDataConverterParseTests
         var config = new SiemensTagConfig { DataType = SiemensTagDataType.Real };
         float value = 12.34f;
         byte[] data = BitConverter.GetBytes(value);
+        // S7 usa big-endian, así que invertimos si el sistema es little-endian
+        if (BitConverter.IsLittleEndian)
+        {
+            Array.Reverse(data);
+        }
         float result = (float)SiemensDataConverter.ConvertFromPlc(config, data, 0);
         Assert.Equal(12.34f, result, 2);
     }
@@ -40,7 +45,8 @@ public class SiemensDataConverterParseTests
     {
         var config = new SiemensTagConfig { DataType = SiemensTagDataType.String, StringSize = 5 };
         // S7NetPlus espera: [MaxLen][Len][Chars...]
-        byte[] data = new byte[] { 5, 3, (byte)'A', (byte)'B', (byte)'C' };
+        // El buffer completo debe tener el tamaño de StringSize + 2 bytes de cabecera.
+        byte[] data = new byte[] { 5, 3, (byte)'A', (byte)'B', (byte)'C', 0, 0 };
         string result = (string)SiemensDataConverter.ConvertFromPlc(config, data, 0);
         Assert.Equal("ABC", result);
     }
@@ -121,6 +127,11 @@ public class SiemensDataConverterParseTests
         var config = new SiemensTagConfig { DataType = SiemensTagDataType.Real };
         float value = 12.34f;
         byte[] data = BitConverter.GetBytes(value);
+        // S7 usa big-endian, así que invertimos si el sistema es little-endian
+        if (BitConverter.IsLittleEndian)
+        {
+            Array.Reverse(data);
+        }
         float result = (float)SiemensDataConverter.ConvertFromPlc(config, data, 0);
         Assert.Equal(12.34f, result, 2);
     }
@@ -130,7 +141,8 @@ public class SiemensDataConverterParseTests
     {
         var config = new SiemensTagConfig { DataType = SiemensTagDataType.String, StringSize = 5 };
         // S7NetPlus espera: [MaxLen][Len][Chars...]
-        byte[] data = new byte[] { 5, 3, (byte)'A', (byte)'B', (byte)'C' };
+        // El buffer completo debe tener el tamaño de StringSize + 2 bytes de cabecera.
+        byte[] data = new byte[] { 5, 3, (byte)'A', (byte)'B', (byte)'C', 0, 0 };
         string result = (string)SiemensDataConverter.ConvertFromPlc(config, data, 0);
         Assert.Equal("ABC", result);
     }
